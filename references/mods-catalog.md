@@ -26,6 +26,16 @@ are the pre-merge Realistic Weapons; retired.
 | EXO-45 Patriot Buff | mods/rexsybimatw/exo45_patriot_buff | HealthComponentData layout + byte-edit pattern |
 | Exosuit Heavy Armor | mods/recon/exo45_armor | HealthComponentData value-scan + identity guard |
 | DRIVER HUD 1.5.1 (installed) | — | network/inventory offsets for the equipped-weapon read |
+| TacticalCombatOverhaul v2.4.1 (rojo) | mods/rojo/tco_* (7 addons) | stamina/recovery/aim-sway/exhaustion patched via raw ffi ReadProcessMemory + stingray; reuses the DRIVER HUD network/inventory offsets (0x346BF98, 0x3326738, 0xF22EC8, 0xF1AEB0, 0xF32F18). Shows a whole game system we hadn't touched |
+| WarbondDesk (warbond_desk) | mods/warbond_desk/main | NATIVE CODE patching: x64 byte-signature scans (hex + mask + anchor + reference_offset + kind="code") locate and patch game .text instructions, with image_base_offset/table_offset/table_count to resolve RIP-relative tables from code. A technique entirely different from value-table patching |
+| Bolter-Jar Dominator (david_hogins) | mods/david_hogins/bolter_jar | the Dominator rechamber done via HD2Runtime typed API (`hd2.options` menu + `require('mods/skyeshade/hd2runtime')` + explosion-demolition choice) — confirms the typed route for our exact use case |
+| Wrench-Repair 1.3.0 (ymir) | mods/ymir/entrenchment_repair | shovel contact repair via HD2Runtime; adapted from Field Repair 1.3 |
+| Support Side Holster 2.6.1 (local) | mods/local/holster_* (67 addons) | multi-option architecture: dozens of tiny 200-byte addons each set one weapon hash in a shared `_G.SupportHolsterOptions` table, one big worker reads them |
+| FirstPerson v2.9 (jim) | mods/jim/first_person | stingray camera repositioning (head node + offset, sr.Vector2/Vector3, ActionCam-style); no stat memory writes |
+| SmoothBoot 3.0 (codex) | mods/codex/smoothboot | a rule engine that re-heads the Bingus mod chain, throttles per-mod (trip_ms circuit breaker), attributes errors by chunk name — meta-infra, not game data |
+| Overdive v1.0 (hd2lab) | mods/hd2lab/spawn_director | spawn-director Lua is OBFUSCATED/encrypted (only the addon header line is readable) — some mods ship unreadable payloads; can't mine technique |
+| Transmog Probe (cow) | mods/cow/transmog_probe | embeds a pre-rasterized glyph atlas (rects) + geometry probe — same glyph-atlas technique as Mech Part HUD |
+| Mission Reroller (ipodalexei) | mods/ipodalexei/mission_reroller* | development core with SUPPORTED_BUILD + record layouts + inspect_snapshot; no native adapter yet |
 
 ## Third-party, cataloged (techniques observed)
 
