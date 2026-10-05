@@ -22,6 +22,7 @@ are the pre-merge Realistic Weapons; retired.
 | Mod | Addon | What it gave us |
 |---|---|---|
 | SHODAN Stat Editor (github SHODAN-HORAI) | mods/shodan/stat_editor | cross-confirms projectile velocity at +32, type 0xBD4042C2, stride 272 (== Dominator OFF_SPEED); writes only on edit/start/map-reload, no re-assert loop |
+| JAR-5 Buff Pack v2.12 (joelc) | mods/joelc/jar5_buff_* | fire modes are a u32 enum array in a ~144-byte record (anchors 0x42480000/0x42F00000 at +0/+4, modes at +0x70/+74/+78, TertiaryFireMode +0x7C None(0)->Auto(1)); reload is a passive stat (type 0x63CE0FEB, stat id 13, f32 1.36) repointing every armor passive block, not a weapon field. Damage/AP/speed patches cross-confirm DamageSettings 0xE0A72CF0 (damage +4, AP +12) and ProjectileSettings 0xBD4042C2 (speed f32 +32, name_upper +4 = 0x1E2FAF6F). NOTE: uses the OCLAW_UPDATE_BUS dispatcher — same attribution/JIT caveat as Realistic Weapons (SKILL section 7); heavy full-address-space scanner |
 | EXO-45 Patriot Buff | mods/rexsybimatw/exo45_patriot_buff | HealthComponentData layout + byte-edit pattern |
 | Exosuit Heavy Armor | mods/recon/exo45_armor | HealthComponentData value-scan + identity guard |
 | DRIVER HUD 1.5.1 (installed) | — | network/inventory offsets for the equipped-weapon read |

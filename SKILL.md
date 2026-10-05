@@ -79,7 +79,7 @@ Re-verify offsets after a game update. The layouts checked against the game data
 
 - Emancipator autocannon is the exosuit branch that must not require `magazines_max == 0`. The other four weapons do. Requiring max 0 for all of them drops the autocannon.
 - Patriot missiles are two identical capacity-14 records. `MISSILE_PICK` writes one. If the Patriot still shows 14, flip it.
-- Do not add a fire-mode or `fire_ability` write. Those values are cached when the weapon is built, and live writes did not change the Dominator's burst. The stock fire-mode selector already bursts. Arming distance (+160) is read per shot, not cached — which is why a live write works. The wheel's alternate (section 11) is the P/40-K's own round (0.1 m arming); the Dominator's own round keeps `GYRO_ARMING` (12 m).
+- Fire modes are NOT on the weapon's `function_info` selector. That enum (single/burst/auto) is cached when the weapon is built, and a live write to `WeaponDataComponentData` +184/+188 did not change the Dominator's burst. The actual selectable fire modes live in a separate ~144-byte (0x90) record as a u32 enum array — verified by the JAR-5 Buff Pack (joelc): mode slots at +0x70/+0x74/+0x78 (2 = single, 3 = burst) and a TertiaryFireMode slot at +0x7C, set from None(0) to Automatic(1) to add full-auto. That record is located by a value fingerprint (anchors 0x42480000/0x42F00000 at +0/+4, mode bytes at +0x70), not by entity hash — its type hash is not yet identified. The same pack patches reload via a passive stat array (type 0x63CE0FEB, stat id 13 → f32 1.36, repointing every armor passive block and skipping ordinal 0), not a weapon field. Arming distance (+160) is read per shot, not cached — which is why a live write works. The wheel's alternate (section 11) is the P/40-K's own round (0.1 m arming); the Dominator's own round keeps `GYRO_ARMING` (12 m).
 - A projectile-field patch does not change the armory's AP or Explosive label. The
   label is a **presentation** field, not native code: it is writable through
   HD2Runtime `hd2.fields.presentation.armor_penetration` / `presentation.traits`,
@@ -246,8 +246,7 @@ return hd2.ensure({ transaction = { id='x', target=p, allow_shared=true,
   `allow_shared` + `expect`/`value` is the framework-level solution to the
   write-conflict problem section 9 documents — the runtime detects shared
   writers and refuses to fight.
-- The runtime blob is 16 MB of 93 embedded Lua chunks (capability catalogs), not
-  a single readable source. It cross-confirms our hashes: `0xBD4042C2`
+- The runtime is fully open source (`SkyeShade/HD2Runtime` on GitHub, `runtime/*.lua` — the memory reader, mappers, event system, all readable), not a closed blob. The *installed* runtime ships as a 16 MB compiled bundle, but the source is public. It cross-confirms our hashes: `0xBD4042C2`
   (ProjectileSettings) x1735, `0xE0A72CF0` (DamageSettings) x1984,
   `0xFB8D88A3` (WeaponMagazine) x29, Dominator resource `0x80F1A156` x12.
 - **HD2Runtime has NO HealthComponentData** (`0xB3915DE3` = 0 occurrences).
@@ -403,6 +402,16 @@ check. Real tooling names its components and credits its authors (filediver/xypw
 Bingus/cowboybingus, RaidingForPants). Closed source is not proof of malware
 (Echelon is legit Delphi/VCL with no published source), but "disable AV" +
 README-only repo + random filler + packed exe together are conclusive.
+
+**Framework → portability.** Asked "is tool X portable to Linux / what is it
+built with," identify the framework from the installer, not from prose: an Inno
+Setup (`<description>Inno Setup</description>`) or Nullsoft `file` tag wrapping a
+binary full of Delphi RTTI strings (`TList<System.Classes.TPersistentClass>`,
+`TRttiInstanceFieldClassic`) is **Delphi/VCL — Windows-only**. A closed-source
+Delphi tool has no Linux port path: "convert it" means a from-scratch rewrite,
+not a recompile, and the source usually is not published (a repo whose
+`/languages` is `{}` and whose recursive tree is docs-only confirms it). State
+that up front instead of attempting a port.
 
 Done when the reply names the payload kind, states run/skip/delete, and nothing
 was executed.
