@@ -40,6 +40,10 @@ are the pre-merge Realistic Weapons; retired.
 | GL-15 Evictor Ammo Selector (working) | — | hand-rolled programmable-ammo reference mod for the Evictor |
 | Super-Earth Armory Forge (community) | mods/community/passive_picker_v4 | passive-picker UI |
 | Weakpoint LockOn All-in-One | (19 binary) | enemy weakpoint targeting — binary patches, not Lua |
+| GL-15 Evictor Airburst v5.4.4 (dsh) | mods/dsh/evictor_gas_airburst | the GOLD STANDARD worked example of programmable-ammo + the clone problem done RIGHT. Evictor entity hash 0x7BB953FE/0x006E4432. Reveals two new tables: ExplosionSettings 0x2AEA2592 (stride 152; damage_type +4, inner_radius +16, outer_radius +20, particle_effect_path +56/+60, audio_event +64, num_shrapnel +80, shrapnel_type +84, persistent_status_volume +100, effect_time +104, audio play/stop +108/+112) and WeaponRoundsComponentData 0x66081072 (component, record 136; primary projectile at +64, magazine +72 f32, ammo +80). KEY GOTCHA: the weapon re-arms option 0 from WeaponRounds +64, NOT ProjectileWeapon +0. Clones projectiles/explosions into types "referenced by NOTHING" (verified by: no entity delta, not in any weapon's +0/+576 — lesson 40) — the clone is SAFE when you verify against weapon slots AND entity deltas AND enemy tables, not when you guess "dormant" from name==0 |
+| Patriot Exosuit Buffs v8 (morningspire) | mods/morningspire/patriot_ap4 | AP4 on the Patriot via known tables (0xBD4042C2, 0xE0A72CF0, 0xFB8D88A3, 0x45171B68) |
+| Field Repair AmmoOnly 1.2 (combat) | mods/combat/field_repair_ammo | WeaponMagazine 0xFB8D88A3 + WeaponRounds 0x66081072 + magazine-anchor 0x6AB382E4 + game.dll 0x6AB3B43F |
+| Armored Overhaul 3.2.0 (chef) | mods/chef/armored_overhaul_* (40+ addons) | vehicle handling/steering/turret via entity-hash-keyed records (Bastion 0x16474112/0x801385B6, Maelstrom 0xB0C9FAF4/0xAF8903F9) + config-file + Mod Options Menu API (register_option/on_change/api=1) + game.dll 0x6AB3B43F anchor |
 
 ## Third-party, cataloged (techniques observed)
 
@@ -64,6 +68,9 @@ are the pre-merge Realistic Weapons; retired.
 - `0xFB8D88A3` dlsum("WeaponMagazineComponentData") — magazines/ammo.
 - `0xE0A72CF0` dlsum("DamageSettings") — damage type table (damage/durable/AP per type).
 - `0xB3915DE3` dlsum("HealthComponentData") — exosuit health + armor.
+- `0x2AEA2592` dlsum("ExplosionSettings") — ExplosionInfo, stride 152. Fields: damage_type +4, inner_radius +16, outer_radius +20, particle_effect_path +56/+60 (u64), audio_event +64, num_shrapnel_projectiles +80, shrapnel_projectile_type +84, persistent_status_volume +100, status_volume_effect_time +104, status_volume_audio_play/stop +108/+112.
+- `0x66081072` dlsum("WeaponRoundsComponentData") — component record 136; primary projectile +64, magazine capacity +72 (f32), ammo capacity +80. The weapon re-arms option 0 from +64, NOT from ProjectileWeapon +0.
+- `0x6AB382E4` magazine-anchor (Field Repair AmmoOnly).
 - `0xC6A4A7935BD1E995` MurmurHash64A multiplier (the packer's hash); low half 0x5BD1E995.
 - `0x6AB3B43F` a game.dll layout anchor (appears in multiple mods and the Mech Part HUD game.dll pair).
 - The config-file pattern: `%LOCALAPPDATA%` key=value overrides read at load, so tunables change without repacking. The Dominator `read_overrides` and many third-party mods use it.

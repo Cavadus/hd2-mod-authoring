@@ -313,9 +313,18 @@ to never clone — point the function slot at a real, referenced round instead.
    arming, 380 m/s) vs UNSAFE (P/40-K's stock round, 0.1 m arming, 350 m/s). Zero
    projectile records are cloned or overwritten, so nothing outside the Dominator's
    own record is written (the only other write is `mode_label`/`mode_icon` on the
-   source round, presentation-only). If both rounds must share an exact stat (e.g.
-   both at 380 m/s), that is the unsolved clone problem again — do not solve it by
-   overwriting an enemy projectile.
+   source round, presentation-only).
+
+   **The clone IS possible — but only with real verification, never a dormancy guess.**
+   The GL-15 Evictor Airburst mod (dsh) clones projectiles/explosions into types it
+   proves are "referenced by NOTHING" three ways: no entity delta, not in ANY
+   weapon's `+0`/`+576`, and not in the enemy tables (the enemy-weapon component
+   `0xd25fc7f7`, section 11 note above). That is the correct clone check. Our v3.0
+   bug was that we skipped all three and guessed "dormant" from `name==0` / `speed==0`,
+   which matches enemy projectiles. So: cloning an unused round is a real technique,
+   but the bar is "prove unreferenced by weapons + entity deltas + enemy tables,"
+   not "looks empty." If both rounds must share an exact stat (e.g. both at 380 m/s),
+   that is the clone path — do not take it without the full three-way check.
 2. **Function-projectile slot.** `ProjectileWeaponComponentData` (`0x45171B68`)
    +576 = the alternate round's type. This is the round fired when the alternate
    is chosen.
@@ -451,6 +460,14 @@ projectile reference path is still unmapped) and **new/unique-projectile mods**
 (the safe-clone problem). Plain stat packs and sound swaps are low signal.
 Open-source GitHub repos beat Nexus zips (readable Lua with comments).
 
-Done when every archive is classified (Lua/binary/obfuscated), mined techniques
-are cataloged with their addon ids, and corrections are merged into the
-authoritative section rather than duplicated.
+**Never delete the archives before finishing the full pass.** Classifying an
+archive (Lua/binary/obfuscated) is NOT the same as mining it — several mods only
+got classified before the folder was wiped, which lost their Lua bodies. The
+whole point of this exercise is to READ every mod's code and extract technique.
+Only delete after every archive has been classified AND every Lua body read AND
+its technique cataloged; if in doubt, keep the folder.
+
+Done when every archive is classified (Lua/binary/obfuscated), every Lua body
+has been READ (not just identified), mined techniques are cataloged with their
+addon ids, and corrections are merged into the authoritative section rather than
+duplicated.
