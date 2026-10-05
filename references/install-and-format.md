@@ -31,9 +31,9 @@ res_ent  = struct.pack('<7Q6I', murmur64(addon_id), LUA_TYPE, 192, 0,0,0,0,
 
 The filename `9ba626afa44a3aa3.patch_0` is a shared slot name, not a type. Lua uses type `0xA14E8DFA2CD117E2`. The Dominator Space Marine II firing sound is that same filename, 2454160 bytes, type `0x535a7bd3e650d799`, and byte 200 is not Lua. It was copied verbatim from the WWSC archive entry `Jar-5 Dominator - Bolter/Space Marine II/9ba626afa44a3aa3.patch_0` into Include folder `Space Marine II/`. Some resource patches do use other names (`0a4bd8a1833f11b2`, `1577e917ad1f287d`). Do not rename those, and do not run either kind through the Lua packer.
 
-## Our mods
+## Maintained mods (worked examples)
 
-- JAR-5 Dominator - Rechambered, addon `mods/dsh/dominator_bolt_pistol`, source `hd2-mods/dominator-rechambered/jar5_dominator_rechambered.lua`. Current release `v3.1` (safe source-round wheel, see SKILL section 11). Manifest `Name` is `JAR-5 Dominator - Rechambered` (hyphen). The colon form is not a Windows folder; HD2 Mod Manager uses `Name` as the storage directory. The zip stays flat. Its thumbnail is that release's 2048 png with a third line, `SPACE MARINE II BOLTER`, under `RECHAMBERED`. Do not copy into a suffix remembered from this file: `hd2a_data.json` `path` is the live folder. The suffix was `_AR246946` in the morning snapshot, `_AR519378` later that day, and `_AR513425` on 2026-10-02. The second top-level option, "Space Marine II firing sound", Include `Space Marine II`, is on by default and independent of `Addon`. `MEMORY.md` still says dbp-1.1.
+- JAR-5 Dominator - Rechambered, addon `mods/dsh/dominator_bolt_pistol`, source `hd2-mods/dominator-rechambered/jar5_dominator_rechambered.lua`. Current release `v3.1` (safe source-round wheel, see SKILL section 11). Manifest `Name` is `JAR-5 Dominator - Rechambered` (hyphen). The colon form is not a Windows folder; HD2 Mod Manager uses `Name` as the storage directory. The zip stays flat. Its thumbnail is that release's 2048 png with a third line, `SPACE MARINE II BOLTER`, under `RECHAMBERED`. Do not copy into a suffix remembered from this file: `hd2a_data.json` `path` is the live folder. The suffix was `_AR246946` in the morning snapshot, `_AR519378` later that day, and `_AR513425` on 2026-10-02. The second top-level option, "Space Marine II firing sound", Include `Space Marine II`, is on by default and independent of `Addon`.
 - Exosuit Rebalance, addon `mods/recon/exosuit_ammo`, source `hd2-mods/exosuit-ammo/exosuit_ammo.lua`, Arsenal folder suffix `_AR269359`. Not for public upload.
 - M-1000, addon `mods/recon/m1000`, source `hd2-mods/m1000/m1000.lua`, Arsenal folder `m1000_combined`. Not a Nexus upload.
 - Realistic Weapons v1.1, addon `mods/recon/realistic_weapons`, uuid `7c1e5a42-6b08-4d3f-9e77-1a4b8c2d6f50`, source `hd2-mods/realistic-weapons/`. One scanner. The checkboxes are `mods/recon/realistic_weapons_{onetwo,arbitrator,adjudicator,evictor,mg206}` and do not scan. Read the live folder from `hd2a_data.json`. The suffix was `_AR737561` later the same day.
@@ -58,7 +58,7 @@ A spatial arm link is kept. `if AR.spatial then AR.list=nil` rediscovered every 
 
 ## Overlaps
 
-Removed 2026-10-01. The folders are in `~/clawd/hd2-mods/_retired/`. They were in `modsLibrary` and not in the active profile:
+Removed 2026-10-01. The folders were moved to a `_retired/` area. They were in `modsLibrary` and not in the active profile:
 
 - `mods/recon/exo45_ammo` — Patriot Ammo v1 and v1.1, same addon id, two folders
 - `mods/recon/lumberer_ammo` — Lumberer Ammo v1 and v1.1, same addon id, two folders

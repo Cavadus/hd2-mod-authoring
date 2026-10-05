@@ -1,11 +1,11 @@
 ---
 name: hd2-mod-authoring
-description: "Helldivers 2 mod, Arsenal install, Bingus lua patch, Wwise sound-bank swap, Nexus unlink, an HD2 Mod Manager install that dies on the manifest Name, translating on-screen text in a glyph-atlas HUD, or drawing a live HUD overlay with the game font: classify the install, conflict-check writers of the same value, then edit, pack, and verify from the game log."
+description: "Helldivers 2 mod, Arsenal install, Bingus lua patch, Wwise sound-bank swap, Nexus unlink, an HD2 Mod Manager install that dies on the manifest Name, translating on-screen text in a glyph-atlas HUD, drawing a live HUD overlay with the game font, or statically vetting a downloaded HD2 mod manager/tool for malware before running it: classify the install, conflict-check writers of the same value, then edit, pack, and verify from the game log."
 ---
 
 # HD2 mod authoring
 
-Work from `~/clawd/hd2-mods/<mod>/`. The live install is `~/.config/hd2arsenal/mods`. Offsets and the 2026-10-01 overlap list are in `references/install-and-format.md`. Re-read that file at the step that cites it. Re-check any layout a game update could move.
+Work from a mod source directory (e.g. `~/hd2-mods/<mod>/`). The live install is `~/.config/hd2arsenal/mods`. Offsets and the 2026-10-01 overlap list are in `references/install-and-format.md`. Re-read that file at the step that cites it. Re-check any layout a game update could move.
 
 ## 1. Classify the install before editing
 
@@ -22,16 +22,16 @@ Done when the reply names the patch kind and any duplicate addon id.
 
 Read the overlap list in `references/install-and-format.md`, then re-scan. A folder under `mods/` is only the library. What loads is `hd2a_data.json` → `modsList[<selectedProfile>].mods` with `enabled: true`, and which suboption is on. The Patriot and Lumberer ammo pairs were library-only; they were not in the profile. Exosuit Rebalance (`mods/recon/exosuit_ammo`) is the writer for those magazines and for armor (+1); the standalone `exo45_armor` was folded into it. Do not put the ammo mods or the standalone armor mod back — armor would double-apply. Bingus does not dedupe different addon ids.
 
-Name the installed mod that already writes the field. Stop unless the operator asked to replace it. To remove one, move the folder to `~/clawd/hd2-mods/_retired/` and delete that uuid from both `modsLibrary` and the profile. Copy `hd2a_data.json` aside first. It is indent-2 JSON.
+Name the installed mod that already writes the field. Stop unless the operator asked to replace it. To remove one, move the folder to a `_retired/` area outside the live mods tree and delete that uuid from both `modsLibrary` and the profile. Copy `hd2a_data.json` aside first. It is indent-2 JSON.
 
 Done when the reply names the overlap, or says there is none.
 
 ## 3. Edit the source tree, then make the text agree
 
-Our mods:
+The mods this playbook was built from are listed here as worked examples — the addon ids and layouts are real, but read the live folder from `hd2a_data.json` each time rather than trusting these paths:
 
 - `hd2-mods/dominator-rechambered/` — addon `mods/dsh/dominator_bolt_pistol`, source `jar5_dominator_rechambered.lua`.
-- `hd2-mods/exosuit-ammo/` — addon `mods/recon/exosuit_ammo`, source `exosuit_ammo.lua`. Personal. Do not upload it.
+- `hd2-mods/exosuit-ammo/` — addon `mods/recon/exosuit_ammo`, source `exosuit_ammo.lua`. Kept local (not distributed with this skill).
 - `hd2-mods/m1000/` — addon `mods/recon/m1000`, source `m1000.lua`. Arsenal folder `m1000_combined`. Gameplay is one scan. Sights and sounds stay the original archive patches.
 - `hd2-mods/realistic-weapons/` — one scanner, addon `mods/recon/realistic_weapons`. The weapon checkboxes are flags, not scanners. Ids are in the reference.
 - `hd2-mods/dixie-horn/` — Wwise bank, not Lua. No `REVISION`. The bank procedure is in the reference.
@@ -53,7 +53,7 @@ Drawing a live overlay with the game font (not the glyph atlas) and reading game
 
 Before another behavior edit, read the game log named in the source. Its revision line must already match the build you believe is loaded. A previous revision means Arsenal moved the folder or the game did not restart.
 
-Copy the current Lua to a backup before editing, and keep old versioned sources and superseded zips in an `archive/` subfolder inside that mod folder (not the mod root or a shared top-level pile). Name the backup `.v<old-revision>.lua.bak`. Change `REVISION` only when that behavior is the one being shipped. A rejected experiment keeps the last shipped `REVISION` and puts a distinct token in the log line the source already prints, so the log proves which build ran. Do not mint the next release number per test. Current Dominator release numbers are in `references/install-and-format.md`. A ricochet experiment does not get the next number. The close-range stop is still unsolved. Make `manifest.json` describe the shipped behavior, not the experiment. If the opening comment disagrees with `REVISION` and the manifest, fix the comment in the same edit. The Dominator comment has claimed "original range" after the range cap changed. `MEMORY.md` still says dbp-1.1. Trust `REVISION` and the manifest.
+Copy the current Lua to a backup before editing, and keep old versioned sources and superseded zips in an `archive/` subfolder inside that mod folder (not the mod root or a shared top-level pile). Name the backup `.v<old-revision>.lua.bak`. Change `REVISION` only when that behavior is the one being shipped. A rejected experiment keeps the last shipped `REVISION` and puts a distinct token in the log line the source already prints, so the log proves which build ran. Do not mint the next release number per test. Current Dominator release numbers are in `references/install-and-format.md`. A ricochet experiment does not get the next number. The close-range stop is still unsolved. Make `manifest.json` describe the shipped behavior, not the experiment. If the opening comment disagrees with `REVISION` and the manifest, fix the comment in the same edit. The Dominator comment has claimed "original range" after the range cap changed. Trust `REVISION` and the manifest.
 
 Done when the backup exists and `REVISION`, the manifest, and the opening comment match.
 
@@ -122,7 +122,7 @@ A firing-sound bank is not part of the Lua Include, even when the filename is `9
 
 Read that mod's `path` from `hd2a_data.json` immediately before the copy. Arsenal changes the `_AR` suffix; the suffix in the reference is not the live folder. Copying into the remembered path leaves the loaded copy on the old build. Replace that folder. Do not leave the old extract next to the new one.
 
-Rebuild the zip under `~/clawd/hd2-mods/` in the same edit. That zip is what gets imported. From inside the source directory, `zip -X` the files so the archive root is `manifest.json`, `thumbnail.png`, and either the Include folders or the root `.patch_0`. No parent-directory entry. Check the namelist.
+Rebuild the zip beside the source directory in the same edit. That zip is what gets imported. From inside the source directory, `zip -X` the files so the archive root is `manifest.json`, `thumbnail.png`, and either the Include folders or the root `.patch_0`. No parent-directory entry. Check the namelist.
 
 A zip with no `manifest.json` imports as a second mod. The label is the filename, the description is empty, and the uuid is new. Name, description, and Nexus identity are not in the patch. They are on both `modsLibrary` and `modsList[<selectedProfile>].mods` in `hd2a_data.json`. `manifest.json` needs `Version`, `Guid`, `Name`, `Description`, and `IconPath`. Use the installed uuid as `Guid` when the zip is that mod. Do not import it again to refresh the label.
 
@@ -290,10 +290,16 @@ to never clone — point the function slot at a real, referenced round instead.
    carry `name==0`, so they look dormant. The Bile Titan's spit is ProjectileType
    79 — zero name — and the clone overwrote it with the Dominator's explosive
    round ("bile titans spitting bolt rounds," titans ragdolling and instakilling
-   players). **You also cannot append a new record:** the projectile table is a
+   players). **You also cannot append a record — and this is why "extend the
+   table" is not a memory-edit option.** The projectile registry is a
    memory-mapped `dl_bin` the game deserializes at load into a fixed 350-record
-   registry, so a 351st record or a brand-new type id is never referenced by the
-   ammo-swap slot. `name==0` / `speed==0` is NOT evidence of "dormant."
+   array, and a weapon references a round by a **compiled `ProjectileType` enum
+   id** (`projtype 177`), which native code resolves as `base + id * stride` —
+   not by pointer. So you cannot grow the array (nothing indexes it) and you
+   cannot invent a new id (the game was compiled with a bounded `0..Count-1`
+   enum). Truly new content goes through the on-disk `dl_bin` / resource-patch
+   route (filediver + repatcher), not a live memory edit. `name==0` / `speed==0`
+   is NOT evidence of "dormant."
 
    **The safe alternate is a round that already exists and is already referenced.**
    For the Dominator, that is the P/40-K's own projectile — the exact round the
@@ -370,3 +376,33 @@ and recoil) silently landed on a different weapon while the log still printed
 wheel logic. A weapon that natively has a fire-mode selector and no ammo selector
 *may* still not render the option even with a correct hash, but that is the
 second hypothesis, not the first.
+
+## 12. Vet a downloaded mod manager / tool before running it
+
+When handed a download (zip or exe) or a repo and asked to evaluate it, triage
+statically and never execute the payload. The HD2 scene has malware fronts
+dressed as "toolkits." Signals, in order of weight:
+
+- **A setup doc that says "disable Windows Defender / add exclusions" = malware.**
+  A legitimate tool never asks you to weaken AV. This alone is enough to say
+  delete-and-skip, no further analysis needed.
+- **Repo with no source = download funnel.** Check the recursive git tree
+  (`/git/trees/main?recursive=1`) and `/languages`. A README-only repo (docs +
+  images, `languages` = `{}`) with a title like "Hacks" is not a mod tool — its
+  real payload is an external installer.
+- **Filler payloads.** Archives bloated with `verb_number.ext` files
+  (`app_107.001`, `utils_132.sdat`) that are pure random bytes (entropy ~8.0
+  bits/byte) and "dll" files that are `data` with no `MZ` header are padding to
+  defeat AV hash/size heuristics.
+- **Packed installer.** A `Nullsoft`/Inno installer at ~8.0 entropy is
+  encrypted/self-extracting — nothing readable statically. Verify the bundled
+  `sha256` matches the exe, then stop; do not extract-and-run.
+
+Fingerprint with `unzip -l`, `file`, `sha256sum`, `strings`, and a byte-entropy
+check. Real tooling names its components and credits its authors (filediver/xypwn,
+Bingus/cowboybingus, RaidingForPants). Closed source is not proof of malware
+(Echelon is legit Delphi/VCL with no published source), but "disable AV" +
+README-only repo + random filler + packed exe together are conclusive.
+
+Done when the reply names the payload kind, states run/skip/delete, and nothing
+was executed.

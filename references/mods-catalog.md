@@ -1,9 +1,8 @@
 # Mod catalog (scanned the mods archive, 2026-10-02)
 
-Classification of every archive, by addon id and kind. "Ours" = we maintain it;
-"mined" = read for a technique; "cataloged" = classified, addon id recorded.
+Classification of every archive, by addon id and kind. "Maintained" = kept in the source tree; "mined" = read for a technique; "cataloged" = classified, addon id recorded.
 
-## Ours (maintain these)
+## Maintained (worked examples)
 
 | Mod | Addon | Kind |
 |---|---|---|
