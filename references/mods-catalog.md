@@ -36,6 +36,10 @@ are the pre-merge Realistic Weapons; retired.
 | Overdive v1.0 (hd2lab) | mods/hd2lab/spawn_director | spawn-director Lua is OBFUSCATED/encrypted (only the addon header line is readable) — some mods ship unreadable payloads; can't mine technique |
 | Transmog Probe (cow) | mods/cow/transmog_probe | embeds a pre-rasterized glyph atlas (rects) + geometry probe — same glyph-atlas technique as Mech Part HUD |
 | Mission Reroller (ipodalexei) | mods/ipodalexei/mission_reroller* | development core with SUPPORTED_BUILD + record layouts + inspect_snapshot; no native adapter yet |
+| Enemy Balance & Behavior / Gameplay Systems 1.2 (enemyov) | mods/enemyov/** (64 addons) | ENEMY ATTACK REFERENCE MECHANISM — the missing piece behind the Bile Titan bug. Enemy attacks reference projectiles through a SEPARATE enemy-weapon component `0xd25fc7f7` (stride 1232 — same stride as player WeaponData 0x88E4DBB1, but a different type hash), NOT through the player `ProjectileWeapon` (0x45171B68). Attack schema: weapon_type 0xd25fc7f7 (1232), spread_type 0xf916ed4b (12), component_type 0xb4789330 (44), damage_type 0x260cbe2b (76, root 0xe0a72cf0). Enemy actors are keyed by 32-bit hash (e.g. bile-spewer head 0x8c5570c9, resource 0xccae5264acd591b7) with named zones; HealthComponent zones carry armor at +216 (matches our exosuit armor offset). Uses a native-code-patching framework (RIP-relative memory resolution + code disassembly) — same class as WarbondDesk |
+| GL-15 Evictor Ammo Selector (working) | — | hand-rolled programmable-ammo reference mod for the Evictor |
+| Super-Earth Armory Forge (community) | mods/community/passive_picker_v4 | passive-picker UI |
+| Weakpoint LockOn All-in-One | (19 binary) | enemy weakpoint targeting — binary patches, not Lua |
 
 ## Third-party, cataloged (techniques observed)
 

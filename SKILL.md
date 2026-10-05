@@ -285,8 +285,13 @@ to never clone — point the function slot at a real, referenced round instead.
    build "found" a spare by looking for a record referenced by no weapon
    (ProjectileWeapon +0/+576) that looked dormant (zero name hash or zero
    speed). **That heuristic is wrong.** Enemy projectiles are referenced OUTSIDE
-   ProjectileWeapon (enemy attacks, shrapnel, beams, orbitals) and legitimately
-   carry `name==0`, so they look dormant. The Bile Titan's spit is ProjectileType
+   ProjectileWeapon — enemy attacks live in a SEPARATE enemy-weapon component
+   `0xd25fc7f7` (stride 1232, the enemy counterpart to player WeaponData
+   0x88E4DBB1), plus a spread component 0xf916ed4b (12 bytes), a component
+   array 0xb4789330 (44 bytes), and a damage table 0x260cbe2b (76 bytes, rooted
+   at 0xe0a72cf0) — none of which a ProjectileWeapon-only scan sees. Enemy
+   actors are keyed by a 32-bit hash, not the weapon entity hash. They also
+   legitimately carry `name==0`, so they look dormant. The Bile Titan's spit is ProjectileType
    79 — zero name — and the clone overwrote it with the Dominator's explosive
    round ("bile titans spitting bolt rounds," titans ragdolling and instakilling
    players). **You also cannot append a record — and this is why "extend the
@@ -415,3 +420,36 @@ that up front instead of attempting a port.
 
 Done when the reply names the payload kind, states run/skip/delete, and nothing
 was executed.
+
+## 13. Mine third-party mods for technique
+
+When the operator drops a folder of mod archives "to study," the goal is to
+extract durable technique, not to install anything. For each archive:
+
+1. **Extract and classify every `.patch_0` with `os.walk`, not a shallow glob.**
+   Patches nest 3–4 levels deep (`options/<name>/Addon/…`), so `glob('*/*.patch_0')`
+   returns zero. Lua = type `0xA14E8DFA2CD117E2` at `0x50` AND byte 200 begins
+   `-- HD2-Addon:`. Anything else is a binary/resource patch — record its type
+   hash from `0x50`.
+2. **Pull the Lua from byte 200; the interesting part is the tail.** The addon
+   id, `change` string, and write offsets live in the `worker.register({…})` /
+   search-spec block at the END of the file. Grepping the middle only finds the
+   shared scanner framework every option reuses — not what it writes.
+3. **Some Lua is obfuscated/encrypted.** If only the `-- HD2-Addon:` header line
+   is readable and the rest is high-entropy bytes, record "unreadable" and move
+   on; do not burn a round trip trying to decode it (e.g. hd2lab spawn_director).
+4. **Catalog each mod** — addon id + what it taught us — in
+   `references/mods-catalog.md`. Fold any correction into the section that owns
+   that topic (a fire-mode or reload finding goes to section 4, not a new
+   section). Note when a mod uses the OCLAW_UPDATE_BUS dispatcher (section 7
+   attribution caveat) so we do not copy that part.
+
+When asked what to ask the operator to download next, the highest-value gaps are
+**enemy-attack mods** (Terminid/Automaton damage or spit tweaks — the enemy →
+projectile reference path is still unmapped) and **new/unique-projectile mods**
+(the safe-clone problem). Plain stat packs and sound swaps are low signal.
+Open-source GitHub repos beat Nexus zips (readable Lua with comments).
+
+Done when every archive is classified (Lua/binary/obfuscated), mined techniques
+are cataloged with their addon ids, and corrections are merged into the
+authoritative section rather than duplicated.
