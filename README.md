@@ -27,13 +27,21 @@ settings tables, and the failure modes that each cost a game test.
 
 ## Install
 
-Copy the `hd2-mod-authoring/` directory into your OpenClaw skills directory:
+Via ClawHub:
+
+```bash
+openclaw skills install @Cavadus/hd2-mod-authoring
+```
+
+([ClawHub page](https://clawhub.ai/Cavadus/hd2-mod-authoring)) — add `--global` to
+install for all local agents, or `--version <ver>` to pin a release.
+
+Or install manually by copying the `hd2-mod-authoring/` directory into your
+OpenClaw skills directory:
 
 ```bash
 cp -r hd2-mod-authoring ~/.openclaw/agents/main/agent/workshop-skills/
 ```
-
-(or install it through ClawHub once it is published there).
 
 ## Caveats
 
