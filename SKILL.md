@@ -1,6 +1,7 @@
 ---
 name: hd2-mod-authoring
 description: "Helldivers 2 mod, Arsenal install, Bingus lua patch, Wwise sound-bank swap, Nexus unlink, an HD2 Mod Manager install that dies on the manifest Name, translating on-screen text in a glyph-atlas HUD, drawing a live HUD overlay with the game font, or statically vetting a downloaded HD2 mod manager/tool for malware before running it: classify the install, conflict-check writers of the same value, then edit, pack, and verify from the game log."
+homepage: "https://github.com/Cavadus/hd2-mod-authoring"
 ---
 
 # HD2 mod authoring
