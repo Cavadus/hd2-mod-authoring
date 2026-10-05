@@ -23,6 +23,7 @@ settings tables, and the failure modes that each cost a game test.
 - `SKILL.md` — the skill body.
 - `references/` — offsets and formats, HUD overlay recipes, and a scanned mod
   catalog.
+- `thumbnail.jpg` — repo/package artwork.
 
 ## Install
 
