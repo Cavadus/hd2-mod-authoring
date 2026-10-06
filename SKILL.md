@@ -109,7 +109,9 @@ The Lumberer Cremator flame is `0a4bd8a1833f11b2.patch_0` and `1577e917ad1f287d.
 
 Done when `cmp` against the previous bytes reports nothing.
 
-A full-bank swap goes stale when the game adds events. Before shipping another copy of an old `.bnk`, extract the current bank and diff HIRC type-4 event ids. If vanilla has an event the patch lacks, splice only the replaced WEM into the current bank and keep vanilla HIRC. List banks with filediver before scanning `data/bundles.*`. The FRV result and the Dixie container fields are in `references/install-and-format.md`. Done when every vanilla event id is still in the patched bank and only the intended WEM size changed.
+A firing-sound bank is a full-bank replacement of one weapon's audio bank, and its HIRC event ids are **per-weapon** — so you can never give weapon A weapon B's report by swapping in B's bank wholesale. Verified 2026-10-05: the Dominator's firing bank `content/audio/wep_jar5_dominator` has 249 WEMs and 16 event ids; the shipped "Space Marine II" bolter bank has the SAME 16 event ids and SAME 249 WEM ids (only the WEM audio differs), which is why a full-bank swap works there. A different weapon's bank (e.g. the broomhandle sidearm, 193 WEMs, 14 event ids) shares ZERO event ids with the Dominator — the game posts the Dominator's event ids, and a foreign bank does not contain them. To add weapon B's firing report to weapon A, splice B's "fire" WEM into A's bank and keep A's HIRC/event ids; this splice is not only for the staleness case below.
+
+A full-bank swap also goes stale when the game adds events. Before shipping another copy of an old `.bnk`, extract the current bank and diff HIRC type-4 event ids. If vanilla has an event the patch lacks, splice only the replaced WEM into the current bank and keep vanilla HIRC. List banks with filediver before scanning `data/bundles.*`. The FRV result, the Dixie container fields, and the raw-bank extraction flags are in `references/install-and-format.md`. Done when every vanilla event id is still in the patched bank and only the intended WEM size changed.
 
 ## 6. Pack and replace the Arsenal copy
 
@@ -189,6 +191,10 @@ not mod overhead.
   `x` makes it a nil global inside that function — "attempt to compare nil with
   number" at the first comparison. Declare locals before the functions that
   reference them. `luaparser` does not catch this.
+- **LuaJIT 5.1: no `goto` / labels.** The game runs LuaJIT 5.1, which has no
+  `goto` statement and no `::label::` (those are Lua 5.2+). A `goto`/`::continue::`
+  rewrite fails the `luaparser` (5.1) gate with `'=' expected near 'continue'` —
+  restructure the loop instead of using a label.
 - **Arsenal overwrites direct edits while running.** Editing a mod folder and
   `hd2a_data.json` while `hd2arsenal` is open gets reverted on its next save.
   Quit Arsenal, edit, reopen, deploy — or import a rebuilt zip instead.
@@ -290,11 +296,15 @@ full verification — see the "clone IS possible" note at the end of step 1.
    build "found" a spare by looking for a record referenced by no weapon
    (ProjectileWeapon +0/+576) that looked dormant (zero name hash or zero
    speed). **That heuristic is wrong.** Enemy projectiles are referenced OUTSIDE
-   ProjectileWeapon — enemy attacks live in a SEPARATE enemy-weapon component
-   `0xd25fc7f7` (stride 1232, the enemy counterpart to player WeaponData
-   0x88E4DBB1), plus a spread component 0xf916ed4b (12 bytes), a component
-   array 0xb4789330 (44 bytes), and a damage table 0x260cbe2b (76 bytes, rooted
-   at 0xe0a72cf0) — none of which a ProjectileWeapon-only scan sees. Enemy
+   ProjectileWeapon — enemy attacks live in an enemy-weapon component
+   `0xd25fc7f7` = `WeaponDataComponent` (the enemy counterpart to
+   player WeaponDataComponentData 0x88E4DBB1, same 1232 stride), plus a spread component
+   `0xf916ed4b` = `SpreadInfo` (12 bytes), a component array `0xb4789330` =
+   `SensorEyeComponent` (44 bytes), and a damage table `0x260cbe2b` = `DamageInfo`
+   (76 bytes, rooted at 0xe0a72cf0) — none of which a ProjectileWeapon-only scan sees. These
+   four are COMPONENT TYPES embedded inside enemy archetype records, not standalone LDLD
+   tables (see `references/memory-census.md`); enemy data loads only in-mission as keyed
+   hash tables, so scanning for `0xd25fc7f7` as a top-level table finds nothing. Enemy
    actors are keyed by a 32-bit hash, not the weapon entity hash. They also
    legitimately carry `name==0`, so they look dormant. The Bile Titan's spit is ProjectileType
    79 — zero name — and the clone overwrote it with the Dominator's explosive
@@ -329,6 +339,39 @@ full verification — see the "clone IS possible" note at the end of step 1.
    but the bar is "prove unreferenced by weapons + entity deltas + enemy tables,"
    not "looks empty." If both rounds must share an exact stat (e.g. both at 380 m/s),
    that is the clone path — do not take it without the full three-way check.
+
+   **The field-selective clone (how, once a target is proven dead).** Build the clone
+   payload from the DEAD record, not the source, so it keeps its own `type` (+0) and
+   `name` (+4) — the function slot (+576) resolves the round BY ITS ENUM TYPE, so a full
+   source copy would stamp the source's type over it and the slot would point at the wrong
+   record. Overlay the source's warhead (damage +60, explosion +144/+156), set the round's
+   ballistics (speed +32, arming +160, lifetime +52 = range/speed), and write the wheel
+   label +12 / icon +16. Before writing, re-verify the dead record still matches its census
+   identity (name + ballistics) so enum recycling cannot slip a live record under you; then
+   re-verify with one type read and fall back to the borrow if it moved. Enemy rounds carry
+   `name==0` (documented; statistically confirmed 2026-10-06 at 3.25× over-representation in the
+   enemy tables — see `references/memory-census.md`), so a `name!=0` record unreferenced by the weapon + shrapnel +
+   re-arm offsets is outside the enemy reference set — that is how the enemy leg is closed
+   without parsing the enemy archetype tables. Worked example (2026-10-06): type 206 = a
+   dead near-duplicate of the R-36 Eruptor round (same name 0x095D6C88 / speed 180 / mass
+   100, but explosion 380 vs 158), cloned into for the Dominator's 380 m/s / 0.1 m UNSAFE
+   round; type 201 was meanwhile recycled (speed 30, damage type 189) — never trust a
+   remembered enum value.
+
+   **The census is a read-only diagnostic addon, not a guess.** To find the
+   provably-unreferenced record, ship a separate throwaway addon (its own addon id,
+   e.g. `mods/dsh/refscan`) that WRITES NOTHING and dumps the three readable reference
+   sources to `Hd2ProjRecon/`: every ProjectileSettings record (type / name / ballistics
+   / arming / damage / explosion refs), every weapon's `+0`/`+576` (walk
+   ProjectileWeapon), the enemy archetype keyed tables (enemy data is NOT a standalone
+   LDLD table — see `references/memory-census.md`), and every LDLD header (type hash →
+   name via reverse dlsum). Set-difference the weapon + enemy + shrapnel references
+   against the 350-record table offline; only a type in NONE of them is a clone target.
+   The projectile table is **not resident while docked** — a single memory pass from
+   the ship finds nothing, so the census must re-scan on a gap (≈10 s) until it has the
+   table, and the operator must actually load a mission. One pass that "found nothing"
+   at the dock is not evidence the table is empty. Parse the dump offline; do not
+   encode the clone target until the set-difference is checked by hand.
 2. **Function-projectile slot.** `ProjectileWeaponComponentData` (`0x45171B68`)
    +576 = the alternate round's type. This is the round fired when the alternate
    is chosen.
@@ -479,8 +522,10 @@ extract durable technique, not to install anything. For each archive:
 
 When asked what to ask the operator to download next, the remaining gaps are
 **open-source enemy-attack / new-projectile mods with readable Lua** — we have
-the enemy-weapon component type (`0xd25fc7f7`) but a second independent
-confirmation of its layout would harden it. Plain stat packs and sound swaps
+the enemy-weapon component's type NAME (`WeaponDataComponent`, 0xd25fc7f7, and
+its SpreadInfo / SensorEyeComponent / DamageInfo sub-components, all resolved by
+reverse dlsum 2026-10-05) but not the field offset where it references its
+projectile — a second independent confirmation of that layout would harden it. Plain stat packs and sound swaps
 are low signal. Open-source GitHub repos beat Nexus zips (readable Lua with
 comments).
 

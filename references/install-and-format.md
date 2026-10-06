@@ -73,7 +73,8 @@ The separate SHODAN tuners (`mods/shodan/arbitrator_tuning`, `adjudicator_tuning
 
 ## Tables verified against game data
 
-To find a component type you have not patched before, do not grep the on-disk `data/game/dl_library.dl_typelib` — it is encrypted (readable strings are garbage). The type names are compiled into the filediver binary: `strings /tmp/filediver/filediver-cli/filediver | grep -oE '[A-Za-z]+ComponentData'`. The LDLD type hash in memory is `dlsum(type_name)` — djb2-add minus 5381, written out verbatim in the GL-15 Evictor Ammo Selector mod (codex) and verified against every hash we know:
+To find a component type you have not patched before, do not grep the on-disk `data/game/dl_library.dl_typelib` — it is encrypted (readable strings are garbage). The type names are compiled into the filediver binary. To list them, use a BROAD pattern — `'[A-Za-z]+ComponentData'` misses half the type library, e.g. `WeaponDataComponent` (no `Data`), `SpreadInfo`, `SensorEyeComponent`, `DamageInfo`, `ProjectileSettings`:
+  `strings /tmp/filediver/filediver-cli/filediver | grep -oE '[A-Za-z_][A-Za-z0-9_]*(Component|Settings|Data|Info|Weapon|Attack)'`. The LDLD type hash in memory is `dlsum(type_name)` — djb2-add minus 5381, written out verbatim in the GL-15 Evictor Ammo Selector mod (codex) and verified against every hash we know:
 
 ```lua
 -- djb2, the Data Library type hash. Verified 2026-10-05 against all 8 known
@@ -91,6 +92,8 @@ end
 ```
 
 Python equivalent: `r = 5381; for c in name: r = (r*33 + ord(c)) % 2**32; return (r - 5381) % 2**32`. This is how a new, never-patched component type's hash is computed from its name instead of trusting a remembered value.
+
+**Reverse lookup (hash → name).** Given only an LDLD type hash, name it by computing `dlsum` over every candidate type name extracted with the BROAD pattern above and matching the hash — don't trust a remembered string. Verified 2026-10-05: this resolved the enemy-attack schema, which had been recorded only as hashes — `0xd25fc7f7` = `WeaponDataComponent` (the enemy counterpart to player `WeaponDataComponentData` 0x88E4DBB1, same 1232 stride), `0xf916ed4b` = `SpreadInfo`, `0xb4789330` = `SensorEyeComponent`, `0x260cbe2b` = `DamageInfo` (rooted at DamageSettings 0xe0a72cf0). These enemy-attack component hashes are TYPE NAMES, not top-level LDLD table keys: the enemy archetypes they live inside are keyed hash tables that only load in-mission, so a census scanning for `0xd25fc7f7` as a standalone table finds nothing (see `references/memory-census.md`, verified 2026-10-06 with a 326-type in-mission census).
 
 The same binary also embeds the datalib Go **struct field names** as json tags, so
 an unknown field is discovered the same way — this is how impact sound was traced:
@@ -139,6 +142,10 @@ Re-list banks after a game update. If `filediver` is not on PATH, the xypwn/file
 filediver --gamedir "$STEAM/steamapps/common/Helldivers 2" \
   --list-format '%N %T' --include '*frv*' --types wwise_bank
 ```
+
+filediver extraction flags: `--audio-format wwise` writes the raw `.bnk`; the default `ogg` decodes each WEM to a separate `.ogg` (use for listening/measurement). `-T strings -i '*'` extracts the game's localization as `.strings.json` (Key/Value pairs) — grep for a weapon's display name (e.g. `Bolt Pistol`) or designation (e.g. `P/40-K`). filediver knows only ~36% of filenames; a hashed bank still extracts by `-i '*<knownname>*'` once it is listed.
+
+Per-weapon event ids (verified 2026-10-05): the Dominator's firing bank `content/audio/wep_jar5_dominator` has 249 WEMs and 16 HIRC type-4 event ids; the shipped "Space Marine II" bolter bank has the SAME 16 event ids and 249 WEM ids (full-bank swap works because only the WEM audio differs). The broomhandle sidearm bank has 193 WEMs and 14 DIFFERENT event ids — zero overlap — so it cannot be swapped in for the Dominator. To give weapon A weapon B's report, splice B's "fire" WEM into A's bank and keep A's HIRC.
 
 On 2026-10-01 that list was `content/audio/vehicle_frv`, `content/audio/wep_frv_heavy_flamer`, and `content/audio/wep_frv_supply_autoturret`. The M-102, M-103 Supply, and M-104 Incinerator share `vehicle_frv`, and that bank holds the horn. The other two are the weapon banks. Do not ship a second copy of the horn bank per vehicle while this is still true.
 
