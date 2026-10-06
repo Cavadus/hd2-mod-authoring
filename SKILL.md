@@ -6,6 +6,25 @@ homepage: "https://github.com/Cavadus/hd2-mod-authoring"
 
 # HD2 mod authoring
 
+## ⚠️ Safety boundary — read this first
+
+Every technique in this skill reads and rewrites another process's memory at
+runtime — the game's own. That is invasive, high-risk work. Hard rules:
+
+- **Your own game process only.** One machine you own, one copy of Helldivers 2
+  you launched, for modding your own game. Never patch another person's process,
+  a system process, or any process you did not start yourself.
+- **It will crash and can corrupt.** A wrong offset or a loose value match
+  corrupts game state (black screen, silent close) or the whole process. Develop
+  against a disposable loadout; back up first.
+- **Read before write, roll back on mismatch.** Locate, verify against vanilla
+  values, write, then read back — in that order, every time. No write to an
+  address you have not first read and identified.
+- **Not a cheat or malware toolkit.** Memory scanning, hooking and value patching
+  are the same primitives cheats and malware use. They are legitimate only here:
+  modding a game you own. Do not reuse them on other software or people, and do
+  not ship a mod that reads or writes another player's process or data.
+
 Work from a mod source directory (e.g. `~/hd2-mods/<mod>/`). The live install is `~/.config/hd2arsenal/mods`. Offsets and the 2026-10-01 overlap list are in `references/install-and-format.md`. Re-read that file at the step that cites it. Re-check any layout a game update could move.
 
 ## 1. Classify the install before editing
@@ -59,6 +78,8 @@ Copy the current Lua to a backup before editing, and keep old versioned sources 
 Done when the backup exists and `REVISION`, the manifest, and the opening comment match.
 
 ## 4. Patch memory the way the failed builds taught
+
+**High-risk: live process-memory patching.** See the safety boundary at the top of this file before writing anything.
 
 Guard the file with `rawget` / `rawset` on one global so it loads once.
 
@@ -158,6 +179,8 @@ Mod Lag Watchdog is installed (`mods/patpatpatrick/mod_lag_finder`). Absence fro
 Done when the log line shows the shipped `REVISION` and, for an experiment that kept that revision, the test token. The in-game numbers must match the manifest, or the reply quotes the log line that failed. `deployed: false` means that check has not happened yet.
 
 ## 8. Value-scan patching (health / armor)
+
+**High-risk: whole-process value scanning.** See the safety boundary at the top of this file before writing anything.
 
 Some tables are found by searching memory for a known VALUE, not the LDLD type
 hash — the record array address cannot be derived from the header. The exosuit
@@ -300,7 +323,7 @@ return hd2.ensure({ transaction = { id='x', target=p, allow_shared=true,
   resolves the record. The tags are RAW localization string IDs, not the SDK's semantic
   ids: `heavy_armor_penetrating` = `0x273E3C6D`, `explosive` = `0x4EFEA81C`,
   `medium_armor_penetrating` = `0xB7E2C047` (the Dominator's stock tag). Guard on the
-  stock tag list and re-apply on map reload (worked example: Dominator v3.4 relabeled
+  stock tag list and re-apply on map reload (worked example: Dominator v3.3.4 relabeled
   MEDIUM → HEAVY + EXPLOSIVE).
 - **Enemy attack → projectile reference (the missing piece of the three-way clone
   check).** HD2Runtime 0.28.0's dev SDK (`EnemyAuthoringCapabilities.json`) addresses
