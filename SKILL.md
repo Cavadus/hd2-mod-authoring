@@ -279,10 +279,12 @@ return hd2.ensure({ transaction = { id='x', target=p, allow_shared=true,
 
 The Autocannon's flak/APHET selector is the game's **programmable-ammo**
 function. The three writes that build it are below. The v3.0 build tried to
-hand-roll a spare projectile record and shipped a game-breaking bug; the fix is
-to never clone — point the function slot at a real, referenced round instead.
+hand-roll a spare projectile record and shipped a game-breaking bug; the safe
+fix is to borrow a real, referenced round (point the function slot at the source
+round) rather than clone. Cloning an unused round IS possible, but only with
+full verification — see the "clone IS possible" note at the end of step 1.
 
-1. **Spare projectile — DO NOT clone, do not hunt for "dormant".** The v3.0
+1. **Spare projectile — borrow a real round, or clone only with full verification.** The v3.0
    build "found" a spare by looking for a record referenced by no weapon
    (ProjectileWeapon +0/+576) that looked dormant (zero name hash or zero
    speed). **That heuristic is wrong.** Enemy projectiles are referenced OUTSIDE
@@ -454,11 +456,12 @@ extract durable technique, not to install anything. For each archive:
    section). Note when a mod uses the OCLAW_UPDATE_BUS dispatcher (section 7
    attribution caveat) so we do not copy that part.
 
-When asked what to ask the operator to download next, the highest-value gaps are
-**enemy-attack mods** (Terminid/Automaton damage or spit tweaks — the enemy →
-projectile reference path is still unmapped) and **new/unique-projectile mods**
-(the safe-clone problem). Plain stat packs and sound swaps are low signal.
-Open-source GitHub repos beat Nexus zips (readable Lua with comments).
+When asked what to ask the operator to download next, the remaining gaps are
+**open-source enemy-attack / new-projectile mods with readable Lua** — we have
+the enemy-weapon component type (`0xd25fc7f7`) but a second independent
+confirmation of its layout would harden it. Plain stat packs and sound swaps
+are low signal. Open-source GitHub repos beat Nexus zips (readable Lua with
+comments).
 
 **Never delete the archives before finishing the full pass.** Classifying an
 archive (Lua/binary/obfuscated) is NOT the same as mining it — several mods only

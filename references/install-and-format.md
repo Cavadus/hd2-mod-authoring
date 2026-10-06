@@ -73,7 +73,24 @@ The separate SHODAN tuners (`mods/shodan/arbitrator_tuning`, `adjudicator_tuning
 
 ## Tables verified against game data
 
-To find a component type you have not patched before, do not grep the on-disk `data/game/dl_library.dl_typelib` — it is encrypted (readable strings are garbage). The type names are compiled into the filediver binary: `strings /tmp/filediver/filediver-cli/filediver | grep -oE '[A-Za-z]+ComponentData'`. The LDLD type hash in memory is `dlsum(type_name)` (e.g. `dlsum("WeaponMagazineComponentData")` is `0xFB8D88A3`); the dlsum algorithm itself is not written down here yet. (2026-10-02, unresolved: a mech armor-rating request named HealthComponentData / DestructibleComponentData / DamagePropagatorComponentData / OverlapDamageComponentData / DamageZoneShieldComponentData as candidates but did not pin which holds armor or its offset.)
+To find a component type you have not patched before, do not grep the on-disk `data/game/dl_library.dl_typelib` — it is encrypted (readable strings are garbage). The type names are compiled into the filediver binary: `strings /tmp/filediver/filediver-cli/filediver | grep -oE '[A-Za-z]+ComponentData'`. The LDLD type hash in memory is `dlsum(type_name)` — djb2-add minus 5381, written out verbatim in the GL-15 Evictor Ammo Selector mod (codex) and verified against every hash we know:
+
+```lua
+-- djb2, the Data Library type hash. Verified 2026-10-05 against all 8 known
+-- hashes (WeaponMagazine 0xFB8D88A3, DamageSettings 0xE0A72CF0,
+-- ProjectileSettings 0xBD4042C2, HealthComponentData 0xB3915DE3,
+-- WeaponData 0x88E4DBB1, ProjectileWeapon 0x45171B68,
+-- ExplosionSettings 0x2AEA2592, WeaponRounds 0x66081072).
+local function dlsum(name)
+    local result = 5381
+    for i = 1, #name do
+        result = (result * 33 + name:byte(i)) % 4294967296
+    end
+    return (result - 5381) % 4294967296
+end
+```
+
+Python equivalent: `r = 5381; for c in name: r = (r*33 + ord(c)) % 2**32; return (r - 5381) % 2**32`. This is how a new, never-patched component type's hash is computed from its name instead of trusting a remembered value.
 
 The same binary also embeds the datalib Go **struct field names** as json tags, so
 an unknown field is discovered the same way — this is how impact sound was traced:
