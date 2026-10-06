@@ -119,6 +119,8 @@ The packer script is not in the mod folder. Reuse the script that wrote the curr
 
 A single-option Lua mod is `manifest.json`, `thumbnail.png`, and `Addon/`. A multi-option mod uses named Include folders. Top-level options can all be on. Suboptions are pick-one. Put the suboption that is enabled now first, so a reimport does not flip it. A bank that is the whole mod has no Options key: `manifest.json`, `thumbnail.png`, and the `.patch_0` at the archive root. That is how SEAF-Chan is installed. Do not move that patch into `Addon/`.
 
+**Nested pick-one suboptions (Hotshot Customisation is the reference).** For a top-level option that is a checkbox whose expansion offers a pick-one choice, the top-level option declares `Include: ["Parent"]` AND `SubOptions`, where each suboption declares `Include: ["Parent/Child"]` — the child is a subfolder inside the parent folder. The parent folder is only a container (holds the subfolders, no patch of its own); each child subfolder holds its own `.patch_0`. In `hd2a_data.json` the selected suboption carries `enabled: true` and the rest `false` (one per group). This is the pattern for mutually-exclusive binary swaps — e.g. four firing-sound banks under one "Firing sound" option — where each is a full-bank replace of the same slot, so only one may be active.
+
 A firing-sound bank is not part of the Lua Include, even when the filename is `9ba626afa44a3aa3.patch_0`. Classify it by the type at `0x50` and by whether byte 200 is Lua. The Dominator sound's type and folder are in `references/install-and-format.md`. Copy those bytes. Give it its own top-level option so it can be off while the gameplay option stays on. The manifest has no enabled field. On a mod that is already installed, set that option `enabled: true` in both `modsLibrary` and the selected profile. Copy `hd2a_data.json` aside first. Set the profile entry `enabled: true`, `deployed: false`, `changed: true` until Arsenal deploys.
 
 Read that mod's `path` from `hd2a_data.json` immediately before the copy. Arsenal changes the `_AR` suffix; the suffix in the reference is not the live folder. Copying into the remembered path leaves the loaded copy on the old build. Replace that folder. Do not leave the old extract next to the new one.
@@ -440,16 +442,35 @@ extract durable technique, not to install anything. For each archive:
 
 1. **Extract and classify every `.patch_0` with `os.walk`, not a shallow glob.**
    Patches nest 3–4 levels deep (`options/<name>/Addon/…`), so `glob('*/*.patch_0')`
-   returns zero. Lua = type `0xA14E8DFA2CD117E2` at `0x50` AND byte 200 begins
-   `-- HD2-Addon:`. Anything else is a binary/resource patch — record its type
-   hash from `0x50`.
+   returns zero. Type `0xA14E8DFA2CD117E2` at `0x50` marks Lua. Within Lua there
+   are three shapes, and the `-- HD2-Addon:` header is only one of them:
+
+   - **Source** — byte 200 begins `-- HD2-Addon:`.
+   - **Compiled bytecode** — byte 200 opens on a LuaJIT chunk header (e.g.
+     `J\x02\x00`) with readable string constants interleaved in the binary: the
+     chunk name (`@module_bridge.lua`), module/require paths
+     (`mods/codex/p11_self_heal`), loader globals (`CowboyBingusModLoader`). No
+     `-- HD2-Addon:` line, but still Lua — do NOT file it under binary. Codex
+     Module Bridge and P11 Self-Heal are this shape (verified by their `J\x02\x00`
+     chunk headers and readable `mods/…` string constants).
+   - **Obfuscated source** — byte 200 still begins `-- HD2-Addon:` but the rest is
+     high-entropy (step 3).
+
+   Anything with a non-Lua type at `0x50` is a binary/resource patch — record its
+   type hash from `0x50`.
 2. **Pull the Lua from byte 200; the interesting part is the tail.** The addon
    id, `change` string, and write offsets live in the `worker.register({…})` /
    search-spec block at the END of the file. Grepping the middle only finds the
    shared scanner framework every option reuses — not what it writes.
-3. **Some Lua is obfuscated/encrypted.** If only the `-- HD2-Addon:` header line
-   is readable and the rest is high-entropy bytes, record "unreadable" and move
-   on; do not burn a round trip trying to decode it (e.g. hd2lab spawn_director).
+3. **Unreadable Lua comes in two shapes — identify which, then move on.** Do not
+   burn a round trip trying to decode either:
+   - **Obfuscated/encrypted source**: the `-- HD2-Addon:` header line is readable
+     but the rest is high-entropy bytes (e.g. hd2lab spawn_director).
+   - **Compiled bytecode**: no readable `-- HD2-Addon:` header at all; the only
+     plaintext is string constants scattered through the chunk (step 1). Those
+     strings still name its dependencies, so grep them for `mods/` before
+     cataloging — that is how Codex Module Bridge revealed it loads
+     `mods/codex/p11_self_heal` and `mods/codex/constitution_bolt_amr`.
 4. **Catalog each mod** — addon id + what it taught us — in
    `references/mods-catalog.md`. Fold any correction into the section that owns
    that topic (a fire-mode or reload finding goes to section 4, not a new
@@ -470,7 +491,7 @@ whole point of this exercise is to READ every mod's code and extract technique.
 Only delete after every archive has been classified AND every Lua body read AND
 its technique cataloged; if in doubt, keep the folder.
 
-Done when every archive is classified (Lua/binary/obfuscated), every Lua body
+Done when every archive is classified (source Lua / compiled bytecode / obfuscated / binary), every Lua body
 has been READ (not just identified), mined techniques are cataloged with their
 addon ids, and corrections are merged into the authoritative section rather than
 duplicated.
