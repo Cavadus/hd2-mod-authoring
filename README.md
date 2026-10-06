@@ -23,6 +23,8 @@ settings tables, and the failure modes that each cost a game test.
 - `SKILL.md` — the skill body.
 - `references/` — offsets and formats, HUD overlay recipes, and a scanned mod
   catalog.
+- `examples/` — the two read-only diagnostics (`refscan` LDLD census, `fmscan`
+  fingerprint value-scan) as worked reference implementations.
 - `thumbnail.jpg` — repo/package artwork.
 
 ## Install
