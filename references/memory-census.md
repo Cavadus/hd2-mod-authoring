@@ -71,7 +71,8 @@ flags) collide with the range and produce mass false positives — ExplosionSett
 "references" all 350 types by accident. Enumerate from the known reference offsets instead
 (ProjectileWeapon +0 default and +576 alternate, WeaponRounds +64 re-arm source, ExplosionSettings shrapnel +84,
 enemy archetype component offsets), then set-difference against the record table. Fire modes do
-NOT reference projectiles — they are single/burst/auto enums in a separate ~144-byte record (SKILL section 4).
+NOT reference projectiles — they are single/burst/auto enums in the weapon's own
+WeaponData record (0x88E4DBB1, +140/+144/+148/+152 — SKILL section 4).
 
 ## Current census facts (2026-10-06)
 

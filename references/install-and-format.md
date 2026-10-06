@@ -159,6 +159,7 @@ Dixie container, measured on the pre-rebuild patch: magic `0xF0000011`. The u32 
 - `0xFB8D88A3` dlsum("WeaponMagazineComponentData") — magazines/ammo.
 - `0x45171B68` dlsum("ProjectileWeaponComponentData") — projtype at +0, programmable-ammo function projectile at +576.
 - `0x88E4DBB1` dlsum("WeaponDataComponentData") — recoil and `function_info` selector at +184/+188.
+- `0x4F2CF417` dlsum("LoadoutEntryComponentData") — armory trait labels (five localization string IDs at +12; 386 index rows of 16-byte `{resource u64, record u32, reserved u32}` then 193 records × 32 bytes). Keyed by resource hash (== entity hash for the Dominator).
 - `0xE0A72CF0` dlsum("DamageSettings") — the damage-type table (Dominator reads damage/durable/AP from it; LAS-98 and MS-11 patch it).
 - `0xB3915DE3` dlsum("HealthComponentData") — exosuit health + armor.
 - `0xC6A4A7935BD1E995` MurmurHash64A multiplier; the low 32 bits `0x5BD1E995`. The packer (murmur64a addon-id hash) and the EXO Stratagem Launcher both use it.

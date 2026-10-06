@@ -80,12 +80,18 @@ Re-verify offsets after a game update. The layouts checked against the game data
 
 - Emancipator autocannon is the exosuit branch that must not require `magazines_max == 0`. The other four weapons do. Requiring max 0 for all of them drops the autocannon.
 - Patriot missiles are two identical capacity-14 records. `MISSILE_PICK` writes one. If the Patriot still shows 14, flip it.
-- Fire modes are NOT on the weapon's `function_info` selector. That enum (single/burst/auto) is cached when the weapon is built, and a live write to `WeaponDataComponentData` +184/+188 did not change the Dominator's burst. The actual selectable fire modes live in a separate ~144-byte (0x90) record as a u32 enum array — verified by the JAR-5 Buff Pack (joelc): mode slots at +0x70/+0x74/+0x78 (2 = single, 3 = burst) and a TertiaryFireMode slot at +0x7C, set from None(0) to Automatic(1) to add full-auto. That record is located by a value fingerprint (anchors 0x42480000/0x42F00000 at +0/+4, mode bytes at +0x70), not by entity hash — its type hash is not yet identified. The same pack patches reload via a passive stat array (type 0x63CE0FEB, stat id 13 → f32 1.36, repointing every armor passive block and skipping ordinal 0), not a weapon field. Arming distance (+160) is read per shot, not cached — which is why a live write works. The wheel's alternate (section 11) is the P/40-K's own round (0.1 m arming); the Dominator's own round keeps `GYRO_ARMING` (12 m).
+- Fire modes live in the weapon's OWN WeaponData record (`0x88E4DBB1`, stride 1232 — the same record that holds recoil and `function_info`): `num_burst` @ +140 (=3), `primary` @ +144 (=Single 2), `secondary` @ +148 (=None 0), `tertiary` @ +152 (=None 0). FireMode enum: None=0/Automatic=1/Single=2/Burst=3. The fire-mode enum is READ LIVE — writing `secondary=Burst(3)` + `tertiary=Automatic(1)` adds Single/Burst/Automatic to the selector. Only `fire_ability` (+940, Dominator 2660 = phoenix) is cached at weapon construction. The cyclic rate is NOT live per shot, but it is NOT permanently baked either: `rounds_per_minute` is three f32 slots in the weapon's OWN ProjectileWeapon record at +4 (X) / +8 (Y) / +12 (Z), Y = the default (`weapon.fire_rate`). It is `instantiationOnly` — the game copies the slots into the weapon when it BUILDS it, so a write applies to weapons built AFTER it (redeploy, reinforce, re-equip), not to one already in hand. HD2Runtime live-proved this (MG-206 `fire_rate.modes` alone; AR-23 Liberator `fire_rate.modes` + `weapon_function.left = rate_of_fire`). To add a selector, fill X and/or Z AND bind an unbound input to `rate_of_fire` (2) in one transaction; selector order Y→Z→X, menu order X,Y,Z. `function_info` (+184 left / +188 right) is the SELECTOR-BINDING enum (which input toggles fire mode), not the mode itself — that is why a write to +184/+188 does not change the modes. **Do not locate the modes by another mod's value fingerprint.** The JAR-5 Buff Pack (joelc) matched `[3,2,3]` (num_burst=3, primary=single=2, secondary=BURST=3) in a ~144-byte record, but that is the Buff Pack's POST-EDIT state — the stock Dominator is `[3,2,0,0]` (secondary=None), so the fingerprint never matches the stock record and the write lands nowhere. This cost three builds (v3.3/3.3.1/3.3.2) before re-reading our own dbp-3.x diagnostic dumps (which had already pinned +140/+144/+148/+152) fixed it in v3.3.3. A value fingerprint from a third-party mod reflects that mod's edited state, not stock — verify it against a stock read before trusting it. The same pack patches reload via a passive stat array (type 0x63CE0FEB, stat id 13 → f32 1.36, repointing every armor passive block and skipping ordinal 0), not a weapon field. Arming distance (+160) is read per shot, not cached — which is why a live write works. The wheel's alternate (section 11) is the P/40-K's own round (0.1 m arming); the Dominator's own round keeps `GYRO_ARMING` (12 m).
 - A projectile-field patch does not change the armory's AP or Explosive label. The
   label is a **presentation** field, not native code: it is writable through
   HD2Runtime `hd2.fields.presentation.armor_penetration` / `presentation.traits`,
   backed by `LoadoutEntryComponentData` +12 (section 10). Flagged
-  `allow_unverified_effect`, and menus build their labels when they open.
+  `allow_unverified_effect`, and menus build their labels when they open. **The
+  reverse also holds:** a `presentation.traits` write that puts **ANTI-TANK** under
+  WEAPONS TRAITS only relabels the card — it is a localization string id in those +12
+  slots, and no gameplay reader reads them, so it never changes damage or
+  penetration. Real anti-tank is a separate `damage.ap_*` edit on the projectile (or
+  explosion) DamageInfo. A streamer showing a laser rifle "made anti-tank" may have
+  only relabeled it; confirm the `ap_*` write before believing the trait tag.
 - **Impact sound is not a projectile-record field either.** It resolves through
   `surface_impact_type` (+168) / `ricochet_impact_type` (+172) — `SurfaceImpactType`
   enum values — into a separate `PhysicsImpactEffectComponentData` lookup whose
@@ -258,6 +264,21 @@ return hd2.ensure({ transaction = { id='x', target=p, allow_shared=true,
 - The runtime is fully open source (`SkyeShade/HD2Runtime` on GitHub, `runtime/*.lua` — the memory reader, mappers, event system, all readable), not a closed blob. The *installed* runtime ships as a 16 MB compiled bundle, but the source is public. It cross-confirms our hashes: `0xBD4042C2`
   (ProjectileSettings) x1735, `0xE0A72CF0` (DamageSettings) x1984,
   `0xFB8D88A3` (WeaponMagazine) x29, Dominator resource `0x80F1A156` x12.
+- **Decide live-vs-cached from the SDK's per-field `effect` model, never by guessing.**
+  `sdk/PlayerWeaponAuthoringCapabilities.json` (and the ModBuilder repo's bundled
+  copy) publishes, for every writable field, an `effect` block: `activeSource`,
+  `appliesWhen` (`weapon_build` / `menu_build`), and `instantiationOnly`. That is
+  the authoritative answer to "is this field read live or cached?":
+  `instantiationOnly: true` = the game copies it into the weapon when it builds
+  it, so a write applies to weapons built AFTER it (redeploy, reinforce,
+  re-equip), not one already in hand; `appliesWhen: menu_build` = presentation
+  (the armory label changes on reopen, not live). `sdk/LiveEvidenceCatalog.json`
+  names the exact fields a user test proved in play (`live_proven`) vs
+  `allow_unverified_effect`. `sdk/WeaponFireRateCapabilities.json` gives each
+  weapon its rate slots, selector state, and writability. Consult these before
+  writing a field whose timing you have not proven yourself — a guessed "cached
+  at construction" cost the cyclic-rate mistake (corrected: `rounds_per_minute`
+  is three f32 slots, `instantiationOnly`, section 4).
 - **HD2Runtime has NO HealthComponentData** (`0xB3915DE3` = 0 occurrences).
   The exosuit health/armor value-scan technique (section 8) fills a gap the
   ecosystem SDK does not cover.
@@ -271,8 +292,37 @@ return hd2.ensure({ transaction = { id='x', target=p, allow_shared=true,
   `allow_unverified_effect` ("an edited label appearing in the menus has not been
   gameplay-tested") and "menus build their labels when they open" — expect the
   change on reopen, not live. The dlsum type hash of `LoadoutEntryComponentData`
-  is not yet extracted; HD2Runtime names it by field, so the API route needs no
-  hash.
+  is `0x4F2CF417`. Hand-rolled route (no HD2Runtime): the table is 386 index rows of
+  16-byte `{resource u64, record u32, reserved u32}` then 193 records × 32 bytes; the
+  five trait tags are the u32 localization string IDs at +12. The index is keyed by the
+  weapon's resource hash — for the Dominator that equals its entity hash
+  `0x80F1A156D9FA1E36`, so the same `{lo,hi,slot,pad}` walk used for WeaponData (section 4)
+  resolves the record. The tags are RAW localization string IDs, not the SDK's semantic
+  ids: `heavy_armor_penetrating` = `0x273E3C6D`, `explosive` = `0x4EFEA81C`,
+  `medium_armor_penetrating` = `0xB7E2C047` (the Dominator's stock tag). Guard on the
+  stock tag list and re-apply on map reload (worked example: Dominator v3.4 relabeled
+  MEDIUM → HEAVY + EXPLOSIVE).
+- **Enemy attack → projectile reference (the missing piece of the three-way clone
+  check).** HD2Runtime 0.28.0's dev SDK (`EnemyAuthoringCapabilities.json`) addresses
+  enemies by `hd2.enemy(name)` / `hd2.structure(name)`, `zone_<index>` and `slot_<n>`,
+  and maps each attack role to a FIXED row: `projectile` / `spray` / `explosion_impact`
+  / `explosion_expiry` → DamageInfo; `projectile_settings` → ProjectileSettings;
+  `explosion_settings_impact` / `explosion_settings_expiry` → ExplosionSettings. So
+  enemy projectiles ARE referenced — through the enemy class's own attack rows into
+  ProjectileSettings, not a standalone enemy table (consistent with our census that
+  found no top-level enemy projectile table). This is the third leg (enemy) of the
+  clone-safety reference set, now reachable by typed SDK rather than reverse-engineering.
+- **A projectile row has three reference slots** (`AttackOutputSlots`): `directDamage`,
+  `impactExplosion`, `expiryExplosion`. A slot write targets the ROW
+  (`hd2.attack_output(row)`), not a host, so it changes every entity firing that row
+  (carries `allow_shared`). This is the typed-SDK equivalent of our field-selective
+  warhead copy (section 11) — and its "shared row" discipline (named `SharedConsumers`,
+  `SharedScopeKey`) is the typed model of our "never overwrite a record something else
+  references."
+- **Runtime's own clone technique** is `AttackOutputSpareTwin`: "an independent native
+  row identical to its twin except its references," re-proven before every write — the
+  same census-verified-dead-record discipline as our Q1 clone, only the SDK publishes
+  the spare row instead of us hunting one.
 - SHODAN Stat Editor is a dependent of HD2Runtime (its weapon/stratagem
   catalogs credit it). Its field layout is authoritative for projectile/damage
   offsets: projectile stride 272 (velocity +32, drag +40, gravity +44, pen
@@ -413,7 +463,7 @@ full verification — see the "clone IS possible" note at the end of step 1.
    icon-resource values above are current as of the v3.1 source-round wheel;
    read them back from the extracted database rather than trusting memory.
 
-Enum (u32): none=0, zeroing=1, rate_of_fire=2, magazine=4, fire_mode=5,
+Enum (u32, WeaponFunctionType at +184/+188): none=0, zeroing=1, rate_of_fire=2, fire_mode=3, magazine=4, light_mode=5, laser_guide=6,
 muzzle_velocity=7, programmable_ammo=8.
 
 **Wheel shows but both icons are blank** — the `mode_label` / `mode_icon` fields
@@ -461,7 +511,11 @@ dressed as "toolkits." Signals, in order of weight:
 
 Fingerprint with `unzip -l`, `file`, `sha256sum`, `strings`, and a byte-entropy
 check. Real tooling names its components and credits its authors (filediver/xypwn,
-Bingus/cowboybingus, RaidingForPants). Closed source is not proof of malware
+Bingus/cowboybingus, RaidingForPants, SkyeShade). **SkyeShade's `HD2Runtime` and
+`HD2Runtime-ModBuilder` (a separate C#/.NET GUI, open source with xUnit tests and
+SHA-256-pinned SDK provenance in `THIRD_PARTY.md`) are legit — do not conflate them
+with the malware repo "helldivers-2-mod-toolkit" (a README-only "Hacks" funnel
+into a packed installer).** Closed source is not proof of malware
 (Echelon is legit Delphi/VCL with no published source), but "disable AV" +
 README-only repo + random filler + packed exe together are conclusive.
 
