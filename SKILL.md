@@ -346,6 +346,37 @@ return hd2.ensure({ transaction = { id='x', target=p, allow_shared=true,
   row identical to its twin except its references," re-proven before every write — the
   same census-verified-dead-record discipline as our Q1 clone, only the SDK publishes
   the spare row instead of us hunting one.
+- **Output families — the master "which component owns the reference" map.** A weapon
+  entity owns exactly ONE output-family component: projectile → `ProjectileWeaponComponent`
+  (+0 ProjectileType; also owns RPM +8, infinite ammo +36); beam → `BeamWeaponComponent`
+  (+0 BeamType; fire mode +100, heat +16); arc → `ArcWeaponComponent` (+0 ArcType; RPM +4,
+  infinite ammo +8); spray → `SprayWeaponComponent` (+200 DamageInfoType); melee →
+  `MeleeWeaponComponent` (+12 DamageInfoType). The fire-control (WeaponData) and resource
+  (Magazine/Rounds/Heat/Charge) components sit alongside. The ONLY cross-family links in
+  settings data: ProjectileInfo +144/+156 → ExplosionType (impact/expiry); ExplosionInfo
+  +84 → ProjectileType (shrapnel/submunitions); ExplosionInfo +120 → ArcType (an explosion
+  can release an arc); BeamInfo +96 → ExplosionType. Nothing outside the beam system
+  references a BeamType.
+- **Status effects live on the DamageInfo row, not the weapon/projectile.** Every DamageInfo
+  has four inline status slots at +44+8n (u32 StatusEffectType then f32 strength); unused
+  slots are 0 and used slots are packed. 71 statuses exist; 11 are "attachable" (proven on a
+  player-side attack): fire, fire_panic, burning_heavy, flamer_slowed, stun_small/medium/large,
+  gas(+_2), gas_confusion(+_2). Status definitions are global 152-byte StatusEffectSettings
+  rows (+40 duration, +44 tick DamageInfo). The numeric status type is NOT stable identity
+  ("Stun Small" = 37 this build, 36 in filediver) — match by the stored name.
+- **Package residency — why a projectile swap can go invisible.** A donor projectile/explosion
+  from another weapon lives in that weapon's loadout package, loaded only while some system
+  holds a reference (RefcountedPackageSystem). Items nobody carries are NOT loaded, so a swap
+  without the donor equipped can spawn a purple question mark / invisible projectile. HD2Runtime
+  0.27+ auto-loads the donor package through the game's own system (live-proven); a hand-rolled
+  mod CANNOT — the Stingray `ResourcePackage` constructor is stripped from this build. This is a
+  hard ceiling on cross-weapon projectile swaps in a Bingus mod without HD2Runtime.
+- **Fire modes are a 4-slot list, not 3.** `WeaponDataComponentData`: +140 `num_burst_rounds`,
+  +144 primary, +148 secondary, +152 tertiary, **+156 quaternary**. FireMode enum: None=0,
+  Automatic=1, Single=2, Burst=3 (values 4–8 are charge/safety states, unnamed and read-only).
+  Full-auto is "write Automatic into an empty mode slot" — no flag or bitmask. `weapon_presentation_traits`
+  is still `pending` (not live-proven) in LiveEvidenceCatalog; `weapon_presentation_penetration_label`
+  IS live-proven (AR-23C) — both need `allow_unverified_effect` for the Dominator.
 - SHODAN Stat Editor is a dependent of HD2Runtime (its weapon/stratagem
   catalogs credit it). Its field layout is authoritative for projectile/damage
   offsets: projectile stride 272 (velocity +32, drag +40, gravity +44, pen
