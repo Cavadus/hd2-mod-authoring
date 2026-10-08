@@ -85,7 +85,22 @@ WeaponData record (0x88E4DBB1, +140/+144/+148/+152 — SKILL section 4).
   referenced**, leaving 178 unreferenced = 29 `name==0` (enemy-only) + **149 `name!=0`
   clone-candidate records**.
 
-### The `name==0` rule is statistically confirmed, not just documented
+### diag-5 dumps the bucket array — join it offline, do not extend refscan again
+
+`refscan_pwbuckets.txt` is one line per bucket: `entity_lo`, `entity_hi`, `slot`.
+Join `slot` to `refscan_weapons.txt` (`projtype` at record +0) and that type to
+`refscan_projectiles.txt` (name hash, speed, mass, drag, gravity, arming, damage
+type). All-zero buckets are hash holes, not failed rows. A census that has
+`refscan_weapons.txt` but no `refscan_pwbuckets.txt` is diag-4 or older; that
+older file cannot recover entity→type. Do not re-patch refscan to add the dump.
+
+Run the census with only refscan loaded. It is read-only, but another weapon-stat
+mod leaves its edits in the fingerprint. Confirmed 2026-10-07 (Bingus: 1 loaded):
+542 buckets, 271 live entities, 272 ProjectileWeapon records, 350 projectiles.
+`refscan_enemy.txt` still does not appear in a mission — enemy weapon components
+are not a top-level LDLD table (above). Do not wait on that file.
+
+## The `name==0` rule is statistically confirmed, not just documented
 
 Scanning the in-mission enemy tables (16 keyed hash tables) for every u32 in the
 ProjectileType range shows `name==0` types appear **3.25× more often** than `name!=0`

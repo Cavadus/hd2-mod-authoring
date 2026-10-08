@@ -101,7 +101,7 @@ Re-verify offsets after a game update. The layouts checked against the game data
 
 - Emancipator autocannon is the exosuit branch that must not require `magazines_max == 0`. The other four weapons do. Requiring max 0 for all of them drops the autocannon.
 - Patriot missiles are two identical capacity-14 records. `MISSILE_PICK` writes one. If the Patriot still shows 14, flip it.
-- Fire modes live in the weapon's OWN WeaponData record (`0x88E4DBB1`, stride 1232 — the same record that holds recoil and `function_info`): `num_burst` @ +140 (=3), `primary` @ +144 (=Single 2), `secondary` @ +148 (=None 0), `tertiary` @ +152 (=None 0). FireMode enum: None=0/Automatic=1/Single=2/Burst=3. The fire-mode enum is READ LIVE — writing `secondary=Burst(3)` + `tertiary=Automatic(1)` adds Single/Burst/Automatic to the selector. Only `fire_ability` (+940, Dominator 2660 = phoenix) is cached at weapon construction. The cyclic rate is NOT live per shot, but it is NOT permanently baked either: `rounds_per_minute` is three f32 slots in the weapon's OWN ProjectileWeapon record at +4 (X) / +8 (Y) / +12 (Z), Y = the default (`weapon.fire_rate`). It is `instantiationOnly` — the game copies the slots into the weapon when it BUILDS it, so a write applies to weapons built AFTER it (redeploy, reinforce, re-equip), not to one already in hand. HD2Runtime live-proved this (MG-206 `fire_rate.modes` alone; AR-23 Liberator `fire_rate.modes` + `weapon_function.left = rate_of_fire`). To add a selector, fill X and/or Z AND bind an unbound input to `rate_of_fire` (2) in one transaction; selector order Y→Z→X, menu order X,Y,Z. `function_info` (+184 left / +188 right) is the SELECTOR-BINDING enum (which input toggles fire mode), not the mode itself — that is why a write to +184/+188 does not change the modes. **Do not locate the modes by another mod's value fingerprint.** The JAR-5 Buff Pack (joelc) matched `[3,2,3]` (num_burst=3, primary=single=2, secondary=BURST=3) in a ~144-byte record, but that is the Buff Pack's POST-EDIT state — the stock Dominator is `[3,2,0,0]` (secondary=None), so the fingerprint never matches the stock record and the write lands nowhere. This cost three builds (v3.3/3.3.1/3.3.2) before re-reading our own dbp-3.x diagnostic dumps (which had already pinned +140/+144/+148/+152) fixed it in v3.3.3. A value fingerprint from a third-party mod reflects that mod's edited state, not stock — verify it against a stock read before trusting it. The same pack patches reload via a passive stat array (type 0x63CE0FEB, stat id 13 → f32 1.36, repointing every armor passive block and skipping ordinal 0), not a weapon field. Arming distance (+160) is read per shot, not cached — which is why a live write works. The wheel's alternate (section 11) is the P/40-K's own round (0.1 m arming); the Dominator's own round keeps `GYRO_ARMING` (12 m).
+- Fire modes live in the weapon's OWN WeaponData record (`0x88E4DBB1`, stride 1232 — the same record that holds recoil and `function_info`): `num_burst` @ +140 (=3), `primary` @ +144 (=Single 2), `secondary` @ +148 (=None 0), `tertiary` @ +152 (=None 0). FireMode enum: None=0/Automatic=1/Single=2/Burst=3. The fire-mode enum is READ LIVE — writing `secondary=Burst(3)` + `tertiary=Automatic(1)` adds Single/Burst/Automatic to the selector. Only `fire_ability` (+940, Dominator 2660 = phoenix) is cached at weapon construction. The cyclic rate is NOT live per shot, but it is NOT permanently baked either: `rounds_per_minute` is three f32 slots in the weapon's OWN ProjectileWeapon record at +4 (X) / +8 (Y) / +12 (Z), Y = the default (`weapon.fire_rate`). It is `instantiationOnly` — the game copies the slots into the weapon when it BUILDS it, so a write applies to weapons built AFTER it (redeploy, reinforce, re-equip), not to one already in hand. HD2Runtime live-proved this (MG-206 `fire_rate.modes` alone; AR-23 Liberator `fire_rate.modes` + `weapon_function.left = rate_of_fire`). TCO 2.6.13 proved the same spawn-copy for reload (`WeaponReloadComponentData` `0x991D454E`, duration at +56) and that WeaponData ergonomics at +356 is not live handling: the table write and the live copies changed the stored number and not the weapon already in hand. Do not hunt live copies of +356. To add a selector, fill X and/or Z AND bind an unbound input to `rate_of_fire` (2) in one transaction; selector order Y→Z→X, menu order X,Y,Z. `function_info` (+184 left / +188 right) is the SELECTOR-BINDING enum (which input toggles fire mode), not the mode itself — that is why a write to +184/+188 does not change the modes. **Do not locate the modes by another mod's value fingerprint.** The JAR-5 Buff Pack (joelc) matched `[3,2,3]` (num_burst=3, primary=single=2, secondary=BURST=3) in a ~144-byte record, but that is the Buff Pack's POST-EDIT state — the stock Dominator is `[3,2,0,0]` (secondary=None), so the fingerprint never matches the stock record and the write lands nowhere. This cost three builds (v3.3/3.3.1/3.3.2) before re-reading our own dbp-3.x diagnostic dumps (which had already pinned +140/+144/+148/+152) fixed it in v3.3.3. A value fingerprint from a third-party mod reflects that mod's edited state, not stock — verify it against a stock read before trusting it. The same pack patches reload via a passive stat array (type 0x63CE0FEB, stat id 13 → f32 1.36, repointing every armor passive block and skipping ordinal 0), not a weapon field. Arming distance (+160) is read per shot, not cached — which is why a live write works. The wheel's alternate (section 11) is the P/40-K's own round (0.1 m arming); the Dominator's own round keeps `GYRO_ARMING` (12 m).
 - A projectile-field patch does not change the armory's AP or Explosive label. The
   label is a **presentation** field, not native code: it is writable through
   HD2Runtime `hd2.fields.presentation.armor_penetration` / `presentation.traits`,
@@ -140,6 +140,8 @@ A firing-sound bank is a full-bank replacement of one weapon's audio bank, and i
 
 A full-bank swap also goes stale when the game adds events. Before shipping another copy of an old `.bnk`, extract the current bank and diff HIRC type-4 event ids. If vanilla has an event the patch lacks, splice only the replaced WEM into the current bank and keep vanilla HIRC. List banks with filediver before scanning `data/bundles.*`. The FRV result, the Dixie container fields, and the raw-bank extraction flags are in `references/install-and-format.md`. Done when every vanilla event id is still in the patched bank and only the intended WEM size changed.
 
+A firing-sound swap never touches gain. The mod replaces the whole bank byte-for-byte, so any loudness or timing difference between shots — "the first shot is much louder" is the recurring report — is authored inside the bank, not a mod bug. Gun banks use the standard Wwise **first-shot attack + quieter tail** design: the first round of a burst is the full report and rapid follow-ups play a lower-gain tail loop, so the first-shot/tail gap is a per-bank authoring choice. Diagnose the bank, don't blame the Lua. A `.patch_0` bank is `BKHD` (header) + `DIDX` (WEM id/offset/size index) + `DATA` (the WEM audio) + `HIRC` (event and gain graph); compare the banks' `HIRC` vs `DATA` vs `DIDX` hashes to tell whether they differ in structure or only in samples — 249 WEMs / 16 events is the Dominator's shape. The WEMs are Wwise Vorbis, which ffprobe/ffmpeg cannot decode (`codec_name=unknown`); measuring dB needs vgmstream. To quiet a hot bank, splice a quieter pre-encoded donor WEM; when no quieter donor WEM exists (SM2's fire report is a layered composite, no clean source), the container-rebuild procedure, the WEM `hash`-chunk caveat, and the PCM re-encode fallback are in `references/install-and-format.md`.
+
 ## 6. Pack and replace the Arsenal copy
 
 Container offsets are in `references/install-and-format.md`. The type at `0x50` says whether the payload is Lua. The filename `9ba626afa44a3aa3.patch_0` is a shared slot name, not a per-mod id.
@@ -164,7 +166,11 @@ Nexus identity is `nexusData`: `modId`, `fileId`, `version`, `updateTimestamp`. 
 
 The operator still quits Arsenal, opens it again, and deploys before a game test. `deployed: false` is not a deployed mod.
 
-A Dominator thumbnail change edits the shipped `thumbnail.png` (2048×2048). `branding/dominator_base_thumbnail.jpg` is 1024×1024 and is not that file. Do not generate a new image, and do not rebuild the release thumbnail from `dominator_render.png` or from the jpg. `view_image` rejects `/tmp`; copy a crop into the mod tree before reading it.
+Editing the mod folder does not change what the game loads. Deploy writes the enabled patches into `Helldivers 2/data/9ba626afa44a3aa3.patch_0`. Bingus reads that file once, at process start, so a running game keeps the Lua it already loaded. Quit, deploy, then launch. Before calling the test done, confirm the new version string is inside that data file, not only in the source or the mod folder. Toggling the mod, or an option under it, while the game is open does not reload it.
+
+An option can be checked while the mod record's own `enabled` is false. The option does nothing then. Read the mod record, not only its options. `hd2a_data.json` can show every mod `enabled: false` while the option boxes are still ticked.
+
+A Dominator thumbnail **tweak** (add or reword one line of text) edits the shipped `thumbnail.png` (2048×2048, the manifest `IconPath`) in place — do not regenerate from scratch for that. `branding/dominator_base_thumbnail.jpg` (1024×1024) is the older pre-render base and is not a rebuild source. A **redesign** (the operator asks to redo it — restructure boxes, add a features/specs panel) rebuilds from the clean weapon cutout `archive/dominator_render.png` (3840×2160 RGBA, weapon bbox x[570,3482] y[543,1528]), NOT from the jpg and NOT as a side effect of a code/manifest edit. The rebuild procedure, layout, design tokens, and how to verify a generated image when the model cannot view it are in `references/thumbnail.md`.
 
 Done when the installed Lua payload equals the source, or the installed bank `cmp`s against the packed bank, each binary Include file `cmp`s clean, the zip namelist matches those files, and a Lua mod's packed `REVISION` is the shipped string.
 
@@ -235,6 +241,69 @@ not mod overhead.
   `0xB6AFF2195568767F` is the **R-36 Eruptor**, not the Dominator — an earlier
   Dominator build pointed `DOMINATOR_ENTITY` at the Eruptor and silently
   installed the ammo wheel + recoil on the wrong weapon. Compare the right one.
+  **The durable fix is to derive the entity hash at runtime, not hardcode it.**
+  The wheel, fire-mode, recoil, and trait lookups all key off the weapon entity
+  hash; a build that reshuffles entity IDs silently kills every one of them while
+  the warhead swap (keyed by `ProjectileType` + record content) keeps working.
+  Derive the hash instead: find the weapon's own ProjectileWeapon record by its
+  content-stable projectile type (projtype at +0, already verified by the warhead
+  matcher), then read the entity hash back out of the 16-byte bucket entry
+  (`{lo u32, hi u32, slot u32, pad u32}`) whose `slot` points at that record, and
+  use that derived hash for the WeaponData and LoadoutEntry lookups. Ordering:
+  the scan can reach WeaponData / LoadoutEntry before ProjectileWeapon, so stash
+  those tables (`pending_wd` / `pending_le`) and resolve them once the entity is
+  derived (a `drain_pending()` call at the end of the ProjectileWeapon resolve).
+  Keep the hardcoded hash only as a diagnostic seed and log when the derived value
+  differs ("build moved it"). A multi-weapon pack cannot key that lookup on the
+  projectile type number alone. Match the ProjectileSettings round by name hash +
+  speed/mass/drag/gravity/arming + damage-type id, and add one more content field
+  when a twin still collides (the MG-206 twin matches all of those and is separated
+  by the u64 at projectile +72). Require exactly one surviving weapon record and exactly one bucket
+  entity. A round fired by several weapon records still counts if a field this
+  mod does not write narrows them to one. Zero or two survivors means write
+  nothing — do not fall back to the seed. Stash the keyed tables until both
+  ProjectileSettings and ProjectileWeapon have been seen; a scan round that has
+  not seen them does not count toward the give-up limit. Realistic Weapons 1.3
+  is the worked example (census 2026-10-07, build `game.dll` `6AB3B43F`): the
+  One-Two grenade is shared by two weapon records and is split on +0x94/+0x98,
+  and the MG-206 round is shared by five and is split on +0x30 float 180.
+- **A game update can silently kill the weapon-wheel features while the warhead
+  swap keeps working — check the game build before touching wheel code.** The
+  Dominator's wheel (fire mode, programmable-ammo selector, recoil, armory
+  traits) is located by the entity hash `DOMINATOR_ENTITY`; the warhead swap is
+  located by `ProjectileType` + record content. So a post-update report of
+  "rechamber works, but no full-auto / no safe-unsafe in the wheel" points at the
+  entity-keyed lookups, not the wheel logic. Before re-deriving anything, confirm
+  a game update landed after the last good run: diff `appmanifest_553850.acf`
+  (`buildid`, `LastUpdated`) and the `Helldivers 2/data/` file mtimes against the
+  mod log's mtime (path is in the source's `write_status`; the Dominator's is
+  `%LOCALAPPDATA%/Hd2ProjRecon/DominatorBoltPistol.log`). A log that predates the
+  update is the last good run, not proof the code broke. **First discriminator:
+  does the operator reproduce it?** If the wheel works on the operator's own
+  machine on the current build, the report is a reporter-side conflict (a second
+  mod writing the same WeaponData fields — the guarded writes back off), not a
+  build break; have the reporter disable every other mod and relaunch before
+  touching code. Only a report the operator reproduces is a build break: then it
+  is a stale entity hash OR a moved table stride. The durable fix for a stale
+  hash is to DERIVE the entity hash at runtime instead of hardcoding it (below,
+  and in `references/install-and-format.md`); do not just re-derive it every build
+  with the refscan census (section 11) — that is the one-time check, not the fix.
+- **Classify a mod's fragility before answering "will a game update break it".**
+  To triage one mod or a whole set, rank each writer by how it LOCATES its target,
+  most-robust first: (1) content identity — name hash + ballistics via
+  `ProjectileType` (survives enum recycling; the Dominator warhead swap); (2)
+  content-anchored value scan (exosuit armor health 1800/550/800 — offset-free but
+  dangerous, section 8); (3) entity-hash-keyed table lookup (weapon entity hash —
+  breaks when a build reshuffles entity IDs; fix by deriving at runtime, above);
+  (4) fixed code offsets (M1000's `0x195C374` — most fragile, a binary shift kills
+  it outright). A mod that *fails safe* — its keyed lookup requires "exactly one
+  layout fits" plus a plausibility ceiling, so drift no-ops cleanly instead of
+  corrupting — is still broken, just silently (Realistic Weapons is this class).
+  Deriving an entity hash uses the fingerprint rule above, not the projectile
+  type number by itself. diag-5 already writes the join to `refscan_pwbuckets.txt`
+  (`references/memory-census.md`). A census without that file is the older dump
+  and cannot be joined offline. Do not guess a fingerprint, and do not extend
+  refscan to add a bucket dump it already writes.
 - **"Raise to value" is not "+1".** Raising AV3->AV4 leaves AV4 untouched; "+1
   to all" also bumps AV4->AV5 and AV0->AV1. The "+1" version writes more fields
   and is less selective, so it needs the full signature guard; a plain raise

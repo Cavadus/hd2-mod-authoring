@@ -113,6 +113,14 @@ ProjectileWeaponComponentData type `0x45171B68`, stride 616, projtype at +0, wea
 
 WeaponDataComponentData type `0x88E4DBB1`, stride 1232, keyed by weapon entity. The Dominator's entity hash is `0x80F1A156D9FA1E36` (lo `0xD9FA1E36`, hi `0x80F1A156`) — the SAME value as its network-descriptor resource, verified against SHODAN's WEAPONS catalog. `0xB6AFF2195568767F` is the R-36 Eruptor, not the Dominator. Holds recoil (drift +0/+4, climb +28/+32) and the weapon-function selector `function_info` at +184 (left) / +188 (right), u32 enum: none=0, zeroing=1, rate_of_fire=2, magazine=4, fire_mode=5, muzzle_velocity=7, programmable_ammo=8.
 
+**Deriving the entity hash instead of hardcoding it (build-resilient keyed lookup).** The wheel / fire-mode / recoil / trait writes all key off the weapon entity hash. Hardcode it and a build that reshuffles entity IDs silently kills all of them while the warhead swap (keyed by `ProjectileType` + record content) keeps working. Derive it:
+
+1. Find the weapon's own ProjectileWeapon record by its content-stable projectile type — walk the 616-byte records for the one whose `+0` (default projectile) equals the Dominator's verified `ProjectileType` (the value the warhead matcher already pinned, stored as `state.dom_type`), not by the entity hash.
+2. Read the entity hash back out of the bucket entry that points at that record: each 16-byte bucket entry is `{lo u32, hi u32, slot u32, pad u32}`; find the entry whose `slot` equals the record index, and take its `lo`/`hi`.
+3. Use that derived hash for the WeaponData (`locate_keyed`) and LoadoutEntry lookups. Keep the hardcoded value only as a diagnostic seed; log when the derived value differs ("build moved it").
+
+Ordering: `wscan_block` can hit WeaponData / LoadoutEntry before ProjectileWeapon. Stash those tables (`pending_wd` / `pending_le`) when the derived hash is not ready, and resolve them from `drain_pending()` — called at the end of the ProjectileWeapon resolve — once the hash is derived. Define `resolve_wd_table` AFTER `recoil_apply` (it calls it; a forward reference to a later `local function` is a nil global, section 9).
+
 ProjectileSettings type `0xBD4042C2`, record stride derived at runtime (hint 272). Dominator ProjectileType 177. This is the warhead and ballistics table. Projectile field offsets (Dominator `OFF_*`): mode label +12 (u32 localisation id), mode icon +16 (u64 resource, little-endian), speed +32, mass +36, drag +40, gravity +44, simulation steps +48 (u32), lifetime +52, lifetime randomness +56, damage type +60, explosion on impact +144, explosion on expire +156, arming distance +160. Impact-visual offsets (the Dominator `VISUAL_FIELDS`, present on every projectile and identical across the 15x100mm family): disintegration effect +112/+116 (u64 lo/hi, zero on the 15x100mm rounds), decal size +164, surface impact type +168 (u32 enum, =4 on the Dominator and P/40-K), ricochet impact type +172 (u32, =3), effect damage type +220.
 
 DamageSettings type `0xE0A72CF0`, stride 76 — the damage/durable/AP/force records. A distinct **settings-array** shape, not the hashmap (WeaponMagazine) or bucket-array (ProjectileWeapon) shapes: LDLD header (24 bytes), then a `{u64 ptr, u64 count}` pair at header+24. The record array is at `ptr` when `ptr > 0x10000`, else at `header+24+ptr` (relative). Record: id +0, damage +4, durable +8, ap_direct +12, ap_slight +16, ap_large +20, ap_extreme +24, demolition +28, stagger +32, push +36 — all u32. Identify a record by the full 9-field vanilla signature, never by id (values recur and the id is not stable). Detect "already patched" by counting records that already match the target signature against a known baseline (the EAT-17 profile already exists exactly once in a vanilla game). The exosuit EAT-17 rocket buff (1250/1250 AP 6/6/5/0 -> 2000/2000 AP 6/6/6/3) uses this.
@@ -145,13 +153,73 @@ filediver --gamedir "$STEAM/steamapps/common/Helldivers 2" \
 
 filediver extraction flags: `--audio-format wwise` writes the raw `.bnk`; the default `ogg` decodes each WEM to a separate `.ogg` (use for listening/measurement). `-T strings -i '*'` extracts the game's localization as `.strings.json` (Key/Value pairs) — grep for a weapon's display name (e.g. `Bolt Pistol`) or designation (e.g. `P/40-K`). filediver knows only ~36% of filenames; a hashed bank still extracts by `-i '*<knownname>*'` once it is listed.
 
+**Measuring firing-sound loudness (the "first shot is much louder" report).** The WEMs are Wwise Vorbis; ffprobe/ffmpeg cannot decode them (`codec_name=unknown`, but ffprobe still reads sample rate/channels). Decode with vgmstream, then measure with ffmpeg's volumedetect:
+```bash
+# no sudo: prebuilt static CLI from the release zip
+curl -sL -o /tmp/vgms.zip https://github.com/vgmstream/vgmstream/releases/latest/download/vgmstream-linux.zip
+cd /tmp && unzip -o vgms.zip vgmstream-cli && chmod +x vgmstream-cli
+/tmp/vgmstream-cli -o out.wav in.wem        # decodes Custom Vorbis -> float WAV
+ffmpeg -i out.wav -af volumedetect -f null - 2>&1 | grep -E 'mean_volume|max_volume'
+```
+To isolate the actual fire reports, diff `DIDX` (the WEM id/offset/size index) across banks: the Dominator's four firing banks share all 249 WEM ids, and only 21 differ — those 21 are the fire samples; the other 228 are byte-identical shared sounds (mechanical clicks, reverb tails). Measure only the differing ids. Per-bank mastering is why the report is SM2-specific: Space Marine II's fire WEMs peak at 0.0 dB (full scale) while Boltgun/Darktide/Necromunda peak at -2.8 to -4.2 dB.
+
+**To quiet a hot bank, splice a quieter pre-encoded WEM — do not re-encode.** Wwise Custom Vorbis has no open-source re-encoder: vgmstream decodes only, wwiser "can't modify banks", and ffmpeg/libvorbis emit standard Vorbis the game won't accept. These firing-sound mods are made by *splicing already-encoded WEMs from the donor game*, not by re-encoding — the WWSC source bank is byte-identical to the shipped one, with only the 21 fire WEMs swapped. The hot first shot is not in the donor's source either: SM2's own fire WEMs peak around -10 dB, so the 0 dB hotness was introduced during the splice. The fix is to splice a quieter fire WEM from the donor's files. Donor-game access: another Wwise game's `.pak` files are ZIP archives; weapon audio is `sounds/desktop/wpn.zip` (the WEMs) + `wpn.bnk` (the bank), and `sounds/memory_info.json` maps each WEM id to a readable name (e.g. `SFX/wpn/bolt_pistol\bolt_pistol_shoot_attack_02.wav`). SM2 ships fire in layers at different levels (attack ≈ -10 dB, bolt cycle ≈ -14 dB, tail ≈ -3 dB), so a quieter variant exists. Splice re-keys the WEM ids, so match by decoded content, not id.
+
+**The splice path can be blocked even when a donor game exists.** For SM2 it
+failed: none of the donor's source fire WEMs matched the shipped fire WEMs above
+0.39 cross-correlation (the author layered/composited the fire report), so there
+is no clean quieter pre-encoded WEM to splice in. When no quieter Vorbis WEM
+exists, the options are (a) accept a different bank as default, or (b) re-encode
+to PCM (below). Do not keep hunting for a matching source WEM once correlation is
+below ~0.4 — the bank is a composite, not a re-encode of one source.
+
+**Rebuilding a `.patch_0` bank after re-encoding a WEM (verified 2026-10-06).**
+Swapping in a *resized* WEM (PCM re-encode, or any length change) requires
+rebuilding the container, not copying the old header. Container layout, in order:
+`BKHD` @ 320, `DIDX` @ 372 (WEM id/offset/size index), `DATA` @ 3368 (the WEM
+audio payload), `HIRC` (event/gain graph, after DATA), then a 57-byte footer
+holding the bank name (`content/audio/wep_jar5_dominator`). Three header length
+fields are content-dependent and go stale if only the WEM bytes change:
+
+- `+192` = `DATA_size + 58344`
+- `+232` = `file_size - 48`  (the file-size field)
+- `+308` = `DATA_size + 58328`
+
+`DATA_size` is the DATA payload length, `file_size` the whole file. The `58344` /
+`58328` constants are for the Dominator firing-bank shape (249 DIDX entries); for a
+different bank `+232` still holds and the other two are `DATA_size + C`, reading
+`C = field - DATA_size` off a fresh bank. Rebuild order: re-emit DIDX with
+recomputed offsets (offsets are relative to `DATA+8`), re-emit DATA, then
+recompute the three fields; HIRC and the footer stay byte-identical. Verify before
+handing over: DIDX entry count unchanged, HIRC byte-identical to source,
+contiguity (`DIDX` ends at `DATA` start, `DATA` ends at `HIRC` start), and
+vgmstream reads a replaced WEM back. (Verified 2026-10-06 across all four
+Dominator firing banks; the SM2 bank rebuilt 2454160 → 5110495 bytes with PCM fire
+WEMs and passed all four checks.)
+
+**The WEM `hash` chunk is content-dependent and is NOT MD5/SHA1.** Each WEM has a
+16-byte `hash` chunk; it differs across banks, but MD5 (payload and whole-WEM),
+first-16-of-SHA1, and MD5 of a `fmt`+`data` slice all failed to reproduce it. When
+re-encoding a WEM, preserve the ORIGINAL `hash` bytes verbatim rather than trying
+to recompute them — the algorithm is still unidentified. If the game rejects the
+result, this chunk is the prime suspect.
+
+**PCM is a fallback when no quieter Vorbis WEM exists (game acceptance
+unverified).** Decode the fire WEM with vgmstream, apply gain to the PCM
+(e.g. -3 dB = 0.708×), and rebuild the WEM as a RIFF/WAVE with a `fmt ` PCM16
+chunk + the preserved original `hash` chunk + the `data` chunk. Structurally this
+verifies (vgmstream reads it back as 16-bit PCM, HIRC unchanged), but whether the
+game ACCEPTS PCM in a slot its HIRC/DIDX declared as Vorbis is untested in-game.
+Treat a PCM bank as an experiment the operator must test in-game; keep the Vorbis
+banks as the rollback.
+
 Per-weapon event ids (verified 2026-10-05): the Dominator's firing bank `content/audio/wep_jar5_dominator` has 249 WEMs and 16 HIRC type-4 event ids; the shipped "Space Marine II" bolter bank has the SAME 16 event ids and 249 WEM ids (full-bank swap works because only the WEM audio differs). The broomhandle sidearm bank has 193 WEMs and 14 DIFFERENT event ids — zero overlap — so it cannot be swapped in for the Dominator. To give weapon A weapon B's report, splice B's "fire" WEM into A's bank and keep A's HIRC.
 
 On 2026-10-01 that list was `content/audio/vehicle_frv`, `content/audio/wep_frv_heavy_flamer`, and `content/audio/wep_frv_supply_autoturret`. The M-102, M-103 Supply, and M-104 Incinerator share `vehicle_frv`, and that bank holds the horn. The other two are the weapon banks. Do not ship a second copy of the horn bank per vehicle while this is still true.
 
 The 2026-08 Dixie patch was a full-bank replace. Against that day's vanilla `vehicle_frv.bnk` it was missing event id 3058490728 and 32 WEM ids. Horn WEM 761194215 was 29636 bytes vanilla and 407654 bytes in the Dixie RIFF. The rebuild keeps vanilla BKHD and HIRC, replaces that WEM, and pads each WEM to a 16-byte boundary.
 
-Dixie container, measured on the pre-rebuild patch: magic `0xF0000011`. The u32 at offset 308 is the bank length. `BKHD` starts at 320. After HIRC the tail is `content/audio/vehicle_frv` plus padding. When the bank changes length, write the new length at 308. Do not use the Lua size fields at `0xA0` and `0xC0`. The zip root is `manifest.json`, `thumbnail.png`, and `9ba626afa44a3aa3.patch_0`, with no Options key and no `Addon/` folder. `Guid` is the installed uuid.
+Dixie container, measured on the pre-rebuild patch: magic `0xF0000011`. `BKHD` starts at 320. After HIRC the tail is `content/audio/vehicle_frv` plus padding. The three content-dependent length fields are at `+192`, `+232`, and `+308`; recompute all three from `DATA_size` and `file_size` (see "Rebuilding a `.patch_0` bank" above), not just offset 308 — `+308` is `DATA_size + C`, not the total file length. Do not use the Lua size fields at `0xA0` and `0xC0`. The zip root is `manifest.json`, `thumbnail.png`, and `9ba626afa44a3aa3.patch_0`, with no Options key and no `Addon/` folder. `Guid` is the installed uuid.
 
 
 ## Reusable constants (cross-confirmed 2026-10-02)
